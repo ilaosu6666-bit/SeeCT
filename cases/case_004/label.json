@@ -1,0 +1,31 @@
+{
+  "id": "case_004",
+  "title": "分叶状肺结节 - 右肺下叶",
+  "class": "Lesion",
+  "difficulty": "medium",
+  "description": "右肺下叶分叶状结节，直径约22mm，边缘呈分叶状，内部密度不均。分叶征提示结节生长不均匀。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 145,
+  "medical_knowledge": {
+    "imaging_features": [
+      "分叶征",
+      "密度不均",
+      "边缘不规则"
+    ],
+    "differential_diagnosis": [
+      "肺腺癌",
+      "结核球"
+    ],
+    "lidc_characteristics": {
+      "subtlety": 3,
+      "spiculation": 3,
+      "texture": 4,
+      "malignancy_avg": 3.8
+    }
+  },
+  "teaching_points": [
+    "AI对分叶状边缘的敏感度高于光滑边缘",
+    "分叶征提示结节各方向生长速度不一"
+  ]
+}

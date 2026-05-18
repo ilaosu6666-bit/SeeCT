@@ -1,0 +1,17 @@
+{
+    "current_model": "resnet18_ct_lesion_normal_best.pt",
+    "num_classes": 2,
+    "class_names": ["Normal", "Lesion"],
+    "class_names_cn": ["正常", "病变"],
+    "class_descriptions": {
+        "Normal": "该区域肺组织未见明显异常密度影",
+        "Lesion": "该区域存在可疑病灶，建议进一步检查"
+    },
+    "input_size": [224, 224],
+    "architecture": "resnet18",
+    "training_config": {
+        "batch_size": 16,
+        "num_epochs": 50,
+        "learning_rate": 1e-4
+    }
+}
