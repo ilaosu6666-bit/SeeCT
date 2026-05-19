@@ -234,7 +234,7 @@ def render_stage1():
                 slice_img = load_image_smart(str(slices[slice_idx]))
                 if slice_img:
                     st.image(slice_img, caption=f"切片 #{slice_idx + 1} / {len(slices)}",
-                             width="stretch")
+                             width=350)
                     st.caption(f"当前层面位置：第 {slice_idx + 1}/{len(slices)} 层 "
                               f"（约 {(slice_idx + 1) / len(slices) * 100:.0f}% 位置）")
                 else:
@@ -292,11 +292,11 @@ def render_stage1():
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(demo_image, caption="原始HU值图像（未经窗处理）", width="stretch",
+            st.image(demo_image, caption="原始HU值图像（未经窗处理）", width=350,
                      clamp=True)
         with col2:
             st.image(windowed, caption=f"窗处理后 (WC={wc}, WW={ww})",
-                     width="stretch", clamp=True)
+                     width=350, clamp=True)
 
         if abs(wc - (-600)) <= 50 and abs(ww - 1500) <= 100:
             st.success("✅ 你已经接近临床标准肺窗参数！WC≈-600, WW≈1500 是观察肺实质的最佳设置。")
@@ -799,7 +799,7 @@ def render_stage4():
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.image(image, caption="CT图像", width="stretch")
+        st.image(image, caption="CT图像", width=400)
     with col2:
         st.markdown("### 病例信息")
         st.write(f"**难度:** {meta.get('difficulty', 'unknown')}")
@@ -878,11 +878,11 @@ def render_stage4():
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(overlay_img, caption="AI 热力图叠加", width="stretch")
+            st.image(overlay_img, caption="AI 热力图叠加", width=400)
         with col2:
             ai_mask = (cam > 0.55).astype(np.uint8)
             ai_outline = _draw_mask_outline(image, ai_mask, (255, 0, 0))
-            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width="stretch")
+            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width=400)
 
         st.markdown("### 诊断评分")
         true_class = meta.get("class", "Unknown")
@@ -975,7 +975,7 @@ def render_stage5():
 
     col1, col2 = st.columns([3, 2])
     with col1:
-        st.image(item["path"], caption=f"CT #{current + 1}", width="stretch")
+        st.image(item["path"], caption=f"CT #{current + 1}", width=350)
 
     with col2:
         st.markdown("### AI辅助")
@@ -987,7 +987,7 @@ def render_stage5():
                 if img:
                     result = _predict_with_model(model, gradcam, img)
                     overlay_img = _overlay_heatmap(img, result["cam"])
-                st.image(overlay_img, caption="AI热力图", width="stretch")
+                st.image(overlay_img, caption="AI热力图", width=300)
                 st.metric("AI判断", item["ai_label"])
             else:
                 st.info("AI判断: " + item["ai_label"])
@@ -1182,7 +1182,7 @@ def _show_gradcam_snapshot(epoch: int, caption: str):
             with cols[i % 3]:
                 img = load_image_smart(os.path.join(gradcam_dir, fname))
                 if img:
-                    st.image(img, caption=f"样本{i+1}", width="stretch")
+                    st.image(img, caption=f"样本{i+1}", width=250)
 
 
 def _show_gradcam_evolution():
@@ -1212,7 +1212,7 @@ def _show_gradcam_evolution():
             with cols[i % 3]:
                 img = load_image_smart(os.path.join(gradcam_dir, fname))
                 if img:
-                    st.image(img, caption=f"样本{i+1}", width="stretch")
+                    st.image(img, caption=f"样本{i+1}", width=250)
         st.caption("💡 热力图中红色区域是AI当前最关注的区域。随着训练深入，"
                    "高亮区会从随机分散逐渐聚焦到真正的病灶位置。")
 

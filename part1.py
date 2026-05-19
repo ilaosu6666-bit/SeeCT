@@ -727,7 +727,7 @@ def main(standalone: bool = True):
     st.markdown("---")
     left, right = st.columns([1.1, 1])
     with left:
-        st.image(image, caption="当前图像", width="stretch")
+        st.image(image, caption="当前图像", width=400)
     with right:
         st.markdown("### 演示流程")
         st.write("1. 先看图，自己判断哪里可能有异常")
@@ -737,7 +737,7 @@ def main(standalone: bool = True):
 
     user_mask = get_user_mask(image)
     outlined_user = draw_mask_outline(image, user_mask, (0, 255, 0))
-    st.image(outlined_user, caption="你的圈选结果（绿色轮廓）", width="stretch")
+    st.image(outlined_user, caption="你的圈选结果（绿色轮廓）", width=400)
 
     if st.button("开始分析"):
 
@@ -801,11 +801,11 @@ def main(standalone: bool = True):
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.image(overlay, caption="AI 热力图叠加", width="stretch")
+            st.image(overlay, caption="AI 热力图叠加", width=350)
         with c2:
-            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width="stretch")
+            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width=350)
         with c3:
-            st.image(compare_img, caption="对比图（黄=重合，绿=用户，红=AI）", width="stretch")
+            st.image(compare_img, caption="对比图（黄=重合，绿=用户，红=AI）", width=350)
 
         st.markdown("### AI 结论")
         if result["pred_class"] == "Lesion":
