@@ -747,9 +747,14 @@ def main(standalone: bool = True):
                 result = predict_with_rule_demo(image)
 
             cam = result["cam"]
+            img_shape = np.array(image).shape
+
+            # Resize CAM to match image size (model outputs 7x7, image is e.g. 512x512)
+            if cam.shape[:2] != img_shape[:2]:
+                cam = cv2.resize(cam, (img_shape[1], img_shape[0]))
 
             # 1. 肺区限制 + 热图优化
-            lung_mask = build_demo_lung_mask(np.array(image).shape)
+            lung_mask = build_demo_lung_mask(img_shape)
             cam_refined = refine_heatmap(cam, lung_mask)
 
             # 2. CAM -> mask
