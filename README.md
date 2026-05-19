@@ -1,11 +1,10 @@
 ---
-title: 智影溯源 - AI肺结节教学平台
-emoji: "🧠"
-colorFrom: indigo
-colorTo: blue
-sdk: streamlit
-sdk_version: "1.28.0"
-app_file: app.py
+title: seeCT
+emoji: 🫁
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8501
 pinned: false
 ---
 
