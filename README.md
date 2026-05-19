@@ -7,11 +7,11 @@
 核心特色：
 - **AI训练师游戏**：扮演AI研究员，经历数据准备→模型搭建→训练调参→诊断评估→临床实战五关
 - **Grad-CAM可解释性**：热力图直观展示AI关注区域，理解模型决策依据
-- **在线访问**：部署于 Hugging Face Spaces，浏览器打开即用
+- **在线访问**：部署于 Streamlit Cloud，浏览器打开即用
 
 ## 在线访问
 
-👉 [https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME](https://huggingface.co/spaces)
+👉 **[https://zhiyingsuyuan.streamlit.app](https://zhiyingsuyuan.streamlit.app)**
 
 ## 本地开发
 
@@ -20,7 +20,7 @@
 pip install -r requirements.txt
 
 # 启动本地服务
-streamlit run app.py --server.port 8501
+streamlit run streamlit_app.py --server.port 8501
 
 # 训练模型（本地GPU）
 python model.py
@@ -30,7 +30,7 @@ python model.py
 
 ```
 CTapp/
-├─ app.py                    # 在线入口
+├─ streamlit_app.py          # 在线入口
 ├─ game.py                   # AI训练师游戏系统
 ├─ part1.py                  # CT分析演示工具
 ├─ model.py                  # ResNet18训练脚本
@@ -46,7 +46,7 @@ CTapp/
 - **深度学习**: PyTorch + ResNet18 / 3D CNN
 - **可解释AI**: Grad-CAM + Guided Backpropagation
 - **Web框架**: Streamlit
-- **部署**: Hugging Face Spaces
+- **部署**: Streamlit Cloud
 - **数据集**: LIDC-IDRI, LUNA16
 
 ## 功能列表
