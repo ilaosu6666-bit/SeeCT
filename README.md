@@ -1,14 +1,4 @@
----
-title: seeCT
-emoji: 🫁
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_port: 8501
-pinned: false
----
-
-# 智影溯源 - 基于可解释AI的肺结节交互式教学平台
+# seeCT 智影溯源 - 基于可解释AI的肺结节交互式教学平台
 
 ## 项目简介
 
