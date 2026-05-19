@@ -827,15 +827,6 @@ def main(standalone: bool = True):
             "这个 App 的重点不是替代医生，而是把 AI 看 CT 的过程可视化。"
             "用户先判断，AI 再给出关注区域和结论，最后用 IoU 做互动反馈。"
         )
-    st.markdown("---")
-    st.markdown("### 安装命令")
-    st.code(
-        "pip install streamlit torch torchvision pillow matplotlib opencv-python\n"
-        "# 如需网页上直接拖框，再安装\n"
-        "pip install streamlit-drawable-canvas\n"
-        "streamlit run streamlit_ct_demo_complete.py",
-        language="bash"
-    )
 
 
 if __name__ == "__main__":
