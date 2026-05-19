@@ -174,7 +174,7 @@ def render_sidebar():
             st.caption("尚未解锁任何成就")
 
         st.markdown("---")
-        if st.button("🔄 重新开始", use_container_width=True):
+        if st.button("🔄 重新开始", width="stretch"):
             reset_game()
 
 
@@ -229,7 +229,7 @@ def render_stage1():
                 slice_img = load_image_smart(str(slices[slice_idx]))
                 if slice_img:
                     st.image(slice_img, caption=f"切片 #{slice_idx + 1} / {len(slices)}",
-                             use_container_width=True)
+                             width="stretch")
                     st.caption(f"当前层面位置：第 {slice_idx + 1}/{len(slices)} 层 "
                               f"（约 {(slice_idx + 1) / len(slices) * 100:.0f}% 位置）")
                 else:
@@ -287,11 +287,11 @@ def render_stage1():
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(demo_image, caption="原始HU值图像（未经窗处理）", use_container_width=True,
+            st.image(demo_image, caption="原始HU值图像（未经窗处理）", width="stretch",
                      clamp=True)
         with col2:
             st.image(windowed, caption=f"窗处理后 (WC={wc}, WW={ww})",
-                     use_container_width=True, clamp=True)
+                     width="stretch", clamp=True)
 
         if abs(wc - (-600)) <= 50 and abs(ww - 1500) <= 100:
             st.success("✅ 你已经接近临床标准肺窗参数！WC≈-600, WW≈1500 是观察肺实质的最佳设置。")
@@ -389,7 +389,7 @@ def render_stage1():
             这正是为什么医学AI需要大量专家标注数据！
             """)
 
-            if st.button("进入下一关 →", type="primary", use_container_width=True):
+            if st.button("进入下一关 →", type="primary", width="stretch"):
                 st.session_state.stage = 2
                 if "初识CT" not in st.session_state.achievements:
                     st.session_state.achievements.append("初识CT")
@@ -507,7 +507,7 @@ ResNet18 结构:
 └─ FC(64→2) → Softmax → [No Nodule, Nodule]
         """)
 
-    if st.button("确认并进入训练 →", type="primary", use_container_width=True):
+    if st.button("确认并进入训练 →", type="primary", width="stretch"):
         st.session_state.stage = 3
         st.session_state.score += 20
         if "架构师" not in st.session_state.achievements:
@@ -563,7 +563,7 @@ def render_stage3():
             history["val_acc"][min(3, len(history["val_acc"])-1)] * 100 if history else 45
         ))
 
-        if st.button("继续观察 →", type="primary", use_container_width=True):
+        if st.button("继续观察 →", type="primary", width="stretch"):
             st.session_state.s3_phase = "decision1"
             st.rerun()
 
@@ -681,7 +681,7 @@ def render_stage3():
 
     # --- 训练完成 ---
     if st.session_state.s3_phase == "decision3" and "d3" in st.session_state.s3_decision_made:
-        if st.button("完成训练 →", type="primary", use_container_width=True):
+        if st.button("完成训练 →", type="primary", width="stretch"):
             st.session_state.s3_phase = "final"
             st.session_state.model_accuracy = 0.823
             st.rerun()
@@ -717,7 +717,7 @@ def render_stage3():
         if "洞察本质" not in st.session_state.achievements:
             st.session_state.achievements.append("洞察本质")
 
-        if st.button("进入诊断评估 →", type="primary", use_container_width=True):
+        if st.button("进入诊断评估 →", type="primary", width="stretch"):
             st.session_state.stage = 4
             st.session_state.stage3_complete = True
             st.rerun()
@@ -764,7 +764,7 @@ def render_stage4():
                 st.session_state.achievements.append("诊断专家")
                 st.session_state.score += 15
 
-        if st.button("进入临床实战 →", type="primary", use_container_width=True):
+        if st.button("进入临床实战 →", type="primary", width="stretch"):
             st.session_state.stage = 5
             st.session_state.stage4_complete = True
             st.rerun()
@@ -794,7 +794,7 @@ def render_stage4():
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.image(image, caption="CT图像", use_container_width=True)
+        st.image(image, caption="CT图像", width="stretch")
     with col2:
         st.markdown("### 病例信息")
         st.write(f"**难度:** {meta.get('difficulty', 'unknown')}")
@@ -846,7 +846,7 @@ def render_stage4():
 
     if (user_has_nodule is not None and
             not st.session_state.s4_diagnosis_made and
-            st.button("启动AI分析 🚀", type="primary", use_container_width=True)):
+            st.button("启动AI分析 🚀", type="primary", width="stretch")):
         st.session_state.s4_diagnosis_made = True
         st.rerun()
 
@@ -873,11 +873,11 @@ def render_stage4():
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(overlay_img, caption="AI 热力图叠加", use_container_width=True)
+            st.image(overlay_img, caption="AI 热力图叠加", width="stretch")
         with col2:
             ai_mask = (cam > 0.55).astype(np.uint8)
             ai_outline = _draw_mask_outline(image, ai_mask, (255, 0, 0))
-            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", use_container_width=True)
+            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width="stretch")
 
         st.markdown("### 诊断评分")
         true_class = meta.get("class", "Unknown")
@@ -970,7 +970,7 @@ def render_stage5():
 
     col1, col2 = st.columns([3, 2])
     with col1:
-        st.image(item["path"], caption=f"CT #{current + 1}", use_container_width=True)
+        st.image(item["path"], caption=f"CT #{current + 1}", width="stretch")
 
     with col2:
         st.markdown("### AI辅助")
@@ -982,7 +982,7 @@ def render_stage5():
                 if img:
                     result = _predict_with_model(model, gradcam, img)
                     overlay_img = _overlay_heatmap(img, result["cam"])
-                st.image(overlay_img, caption="AI热力图", use_container_width=True)
+                st.image(overlay_img, caption="AI热力图", width="stretch")
                 st.metric("AI判断", item["ai_label"])
             else:
                 st.info("AI判断: " + item["ai_label"])
@@ -1106,7 +1106,7 @@ def _render_s5_results():
     AI不是万能的，关键是与人类专业判断互补配合。
     """)
 
-    if st.button("🔄 重新挑战", use_container_width=True):
+    if st.button("🔄 重新挑战", width="stretch"):
         reset_game()
 
 
@@ -1177,7 +1177,7 @@ def _show_gradcam_snapshot(epoch: int, caption: str):
             with cols[i % 3]:
                 img = load_image_smart(os.path.join(gradcam_dir, fname))
                 if img:
-                    st.image(img, caption=f"样本{i+1}", use_container_width=True)
+                    st.image(img, caption=f"样本{i+1}", width="stretch")
 
 
 def _show_gradcam_evolution():
@@ -1207,7 +1207,7 @@ def _show_gradcam_evolution():
             with cols[i % 3]:
                 img = load_image_smart(os.path.join(gradcam_dir, fname))
                 if img:
-                    st.image(img, caption=f"样本{i+1}", use_container_width=True)
+                    st.image(img, caption=f"样本{i+1}", width="stretch")
         st.caption("💡 热力图中红色区域是AI当前最关注的区域。随着训练深入，"
                    "高亮区会从随机分散逐渐聚焦到真正的病灶位置。")
 

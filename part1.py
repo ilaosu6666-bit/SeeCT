@@ -80,11 +80,11 @@ def render_learning_demo():
 
     top1, top2 = st.columns([1, 1])
     with top1:
-        if st.button("重新开始学习演示", use_container_width=True):
+        if st.button("重新开始学习演示", width="stretch"):
             reset_learning_demo()
             st.rerun()
     with top2:
-        if st.button("下一步", use_container_width=True):
+        if st.button("下一步", width="stretch"):
             st.session_state.learn_step = min(st.session_state.learn_step + 1, 5)
             st.rerun()
 
@@ -723,7 +723,7 @@ def main(standalone: bool = True):
     st.markdown("---")
     left, right = st.columns([1.1, 1])
     with left:
-        st.image(image, caption="当前图像", use_container_width=True)
+        st.image(image, caption="当前图像", width="stretch")
     with right:
         st.markdown("### 演示流程")
         st.write("1. 先看图，自己判断哪里可能有异常")
@@ -733,7 +733,7 @@ def main(standalone: bool = True):
 
     user_mask = get_user_mask(image)
     outlined_user = draw_mask_outline(image, user_mask, (0, 255, 0))
-    st.image(outlined_user, caption="你的圈选结果（绿色轮廓）", use_container_width=True)
+    st.image(outlined_user, caption="你的圈选结果（绿色轮廓）", width="stretch")
 
     if st.button("开始分析"):
 
@@ -792,11 +792,11 @@ def main(standalone: bool = True):
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.image(overlay, caption="AI 热力图叠加", use_container_width=True)
+            st.image(overlay, caption="AI 热力图叠加", width="stretch")
         with c2:
-            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", use_container_width=True)
+            st.image(ai_outline, caption="AI 关注区域（红色轮廓）", width="stretch")
         with c3:
-            st.image(compare_img, caption="对比图（黄=重合，绿=用户，红=AI）", use_container_width=True)
+            st.image(compare_img, caption="对比图（黄=重合，绿=用户，红=AI）", width="stretch")
 
         st.markdown("### AI 结论")
         if result["pred_class"] == "Lesion":
