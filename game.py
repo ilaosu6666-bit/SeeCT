@@ -221,22 +221,23 @@ def render_stage1():
 
         demo_case = Path("cases/case_001/slices")
         if demo_case.exists():
-            slices = sorted([f for f in demo_case.iterdir() if f.suffix.lower() == ".png"])
-            if slices:
+            slices = sorted([f for f in demo_case.iterdir()
+                           if f.suffix.lower() in (".png", ".npy") and "image" not in f.name])
+            if len(slices) > 0:
                 slice_idx = st.slider("切片编号 (Z轴)", 0, len(slices) - 1,
                                       len(slices) // 2, key="s1_slice_browser")
                 slice_img = load_image_smart(str(slices[slice_idx]))
                 if slice_img:
                     st.image(slice_img, caption=f"切片 #{slice_idx + 1} / {len(slices)}",
                              use_container_width=True)
+                    st.caption(f"当前层面位置：第 {slice_idx + 1}/{len(slices)} 层 "
+                              f"（约 {(slice_idx + 1) / len(slices) * 100:.0f}% 位置）")
                 else:
-                    st.warning("切片数据未找到")
-                st.caption(f"当前层面位置：第 {slice_idx + 1}/{len(slices)} 层 "
-                          f"（约 {(slice_idx + 1) / len(slices) * 100:.0f}% 位置）")
+                    st.info("切片可通过本地运行 build_case_library.py 生成。")
             else:
-                st.warning("病例切片数据未找到，请先运行 build_case_library.py")
+                st.info("切片数据未上传（PNG在线不可用，仅本地可见）。游戏其他功能不受影响。")
         else:
-            st.warning("病例库未构建，请先运行 build_case_library.py")
+            st.info("切片浏览器仅在本地完整版可用。在线版继续体验其他功能。")
 
     with tab2:
         st.subheader("肺窗调节实验")
@@ -279,7 +280,10 @@ def render_stage1():
 
         low = wc - ww / 2
         high = wc + ww / 2
-        windowed = np.clip((img_np - low) / (high - low) * 255, 0, 255).astype(np.uint8)
+        if abs(high - low) < 1e-6:
+            windowed = img_np.astype(np.uint8)
+        else:
+            windowed = np.clip((img_np - low) / (high - low) * 255, 0, 255).astype(np.uint8)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -359,9 +363,9 @@ def render_stage1():
                         st.caption("学习提示：正常血管断面和钙化点容易与结节混淆。"
                                    "浏览相邻切片有助于判断。")
 
-        all_done = len(revealed) == len(samples)
+        all_done = len(revealed) == len(samples) and len(samples) > 0
         if all_done:
-            accuracy = len([i for i in revealed if answers.get(i) == samples[i][1]]) / len(samples)
+            accuracy = len([i for i in revealed if answers.get(i) == samples[i][1]]) / max(1, len(samples))
             st.markdown("---")
             st.subheader("📊 数据收集报告")
             col1, col2, col3 = st.columns(3)
