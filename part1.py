@@ -220,10 +220,7 @@ except Exception:
 # =========================
 # 基础配置
 # =========================
-try:
-    st.set_page_config(page_title="智影溯源", layout="wide")
-except st.errors.StreamlitAPIException:
-    pass
+# st.set_page_config is called by streamlit_app.py — do not call here to avoid React errors
 
 APP_TITLE = "智影溯源"
 IMAGE_SIZE = 224
