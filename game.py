@@ -46,15 +46,20 @@ MODEL_CONFIG_PATH = "model_config.json"
 
 
 def load_image_smart(path: str):
-    """加载图片，优先PNG，回退到NPY。"""
-    if os.path.exists(path):
-        return Image.open(path).convert("RGB")
-    npy_path = path.rsplit(".", 1)[0] + ".npy"
+    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
+    p = Path(path)
+    if p.suffix.lower() == ".npy":
+        if p.exists():
+            arr = np.load(str(p))
+            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
+                arr = (arr * 255).astype(np.uint8)
+            return Image.fromarray(arr.astype(np.uint8))
+        return None
+    if p.exists():
+        return Image.open(p).convert("RGB")
+    npy_path = str(p).rsplit(".", 1)[0] + ".npy"
     if os.path.exists(npy_path):
-        arr = np.load(npy_path)
-        if arr.dtype == np.float64 or arr.dtype == np.float32:
-            arr = (arr * 255).astype(np.uint8) if arr.max() <= 1.0 else arr.astype(np.uint8)
-        return Image.fromarray(arr.astype(np.uint8))
+        return load_image_smart(npy_path)
     return None
 
 VAL_TEST_TRANSFORM = transforms.Compose([

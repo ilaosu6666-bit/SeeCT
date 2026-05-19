@@ -371,16 +371,20 @@ def find_first_image(case_dir: Path) -> Optional[Path]:
 
 
 def _load_image_smart(path: str):
-    """加载图片，优先PNG，回退到NPY。"""
+    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
     p = Path(path)
+    if p.suffix.lower() == ".npy":
+        if p.exists():
+            arr = np.load(str(p))
+            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
+                arr = (arr * 255).astype(np.uint8)
+            return Image.fromarray(arr.astype(np.uint8))
+        return None
     if p.exists():
         return Image.open(p).convert("RGB")
     npy_path = p.with_suffix(".npy")
     if npy_path.exists():
-        arr = np.load(str(npy_path))
-        if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
-            arr = (arr * 255).astype(np.uint8)
-        return Image.fromarray(arr.astype(np.uint8))
+        return _load_image_smart(str(npy_path))
     return None
 
 
@@ -822,11 +826,6 @@ def main(standalone: bool = True):
             st.markdown("### 病例库参考标签")
             st.write(f"病例库标注类别：**{meta.get('class')}**")
 
-        st.markdown("### 建议答辩说法")
-        st.info(
-            "这个 App 的重点不是替代医生，而是把 AI 看 CT 的过程可视化。"
-            "用户先判断，AI 再给出关注区域和结论，最后用 IoU 做互动反馈。"
-        )
 
 
 if __name__ == "__main__":
