@@ -1,3 +1,14 @@
+---
+title: 智影溯源 - AI肺结节教学平台
+emoji: 🫁
+colorFrom: indigo
+colorTo: blue
+sdk: streamlit
+sdk_version: "1.28.0"
+app_file: app.py
+pinned: false
+---
+
 # seeCT 智影溯源 - 基于可解释AI的肺结节交互式教学平台
 
 ## 项目简介

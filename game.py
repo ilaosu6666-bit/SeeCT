@@ -189,6 +189,14 @@ def render_stage1():
     st.caption("目标：理解CT影像数据，收集并准备训练样本")
     st.markdown("---")
 
+    # 追踪标签页浏览状态
+    if "s1_tab1_visited" not in st.session_state:
+        st.session_state.s1_tab1_visited = False
+    if "s1_tab2_visited" not in st.session_state:
+        st.session_state.s1_tab2_visited = False
+    if "s1_tab3_complete" not in st.session_state:
+        st.session_state.s1_tab3_complete = False
+
     tab1, tab2, tab3 = st.tabs(["📖 认识CT数据", "🎚️ 肺窗调节实验", "🏷️ 标记训练数据"])
 
     with tab1:
@@ -229,8 +237,10 @@ def render_stage1():
             slices = sorted([f for f in demo_case.iterdir()
                            if f.suffix.lower() in (".png", ".npy") and "image" not in f.name])
             if len(slices) > 0:
-                slice_idx = st.slider("切片编号 (Z轴)", 0, len(slices) - 1,
-                                      len(slices) // 2, key="s1_slice_browser")
+                slice_idx = st.slider(
+                    "切片编号 (Z轴)", 0, len(slices) - 1,
+                    len(slices) // 2, key="s1_slice_browser",
+                    on_change=lambda: st.session_state.update({"s1_tab1_visited": True}))
                 slice_img = load_image_smart(str(slices[slice_idx]))
                 if slice_img:
                     st.image(slice_img, caption=f"切片 #{slice_idx + 1} / {len(slices)}",
@@ -239,10 +249,13 @@ def render_stage1():
                               f"（约 {(slice_idx + 1) / len(slices) * 100:.0f}% 位置）")
                 else:
                     st.info("切片可通过本地运行 build_case_library.py 生成。")
+                    st.session_state.s1_tab1_visited = True  # 已阅读但无数据
             else:
                 st.info("切片数据未上传（PNG在线不可用，仅本地可见）。游戏其他功能不受影响。")
+                st.session_state.s1_tab1_visited = True
         else:
             st.info("切片浏览器仅在本地完整版可用。在线版继续体验其他功能。")
+            st.session_state.s1_tab1_visited = True
 
     with tab2:
         st.subheader("肺窗调节实验")
@@ -254,9 +267,11 @@ def render_stage1():
         col1, col2 = st.columns([1, 1])
         with col1:
             wc = st.slider("窗位 WC (Window Center)", -1000, 500, -600, 10,
-                           help="窗位决定了显示的HU中心值。肺窗通常设在-600HU。")
+                           help="窗位决定了显示的HU中心值。肺窗通常设在-600HU。",
+                           on_change=lambda: st.session_state.update({"s1_tab2_visited": True}))
             ww = st.slider("窗宽 WW (Window Width)", 100, 3000, 1500, 10,
-                           help="窗宽决定了显示的HU范围。肺窗通常为1500HU宽度。")
+                           help="窗宽决定了显示的HU范围。肺窗通常为1500HU宽度。",
+                           on_change=lambda: st.session_state.update({"s1_tab2_visited": True}))
 
         with col2:
             st.markdown("### 快速预设")
@@ -267,6 +282,7 @@ def render_stage1():
                 if st.button(name, key=f"s1_preset_{name}"):
                     st.session_state["s1_wc"] = p_wc
                     st.session_state["s1_ww"] = p_ww
+                    st.session_state.s1_tab2_visited = True
                     st.rerun()
 
         demo_image = None
@@ -394,14 +410,42 @@ def render_stage1():
             这正是为什么医学AI需要大量专家标注数据！
             """)
 
-            if st.button("进入下一关 →", type="primary", width="stretch"):
-                st.session_state.stage = 2
-                if "初识CT" not in st.session_state.achievements:
-                    st.session_state.achievements.append("初识CT")
-                st.session_state.stage1_complete = True
-                st.rerun()
+            st.session_state.s1_tab3_complete = True
 
-    render_stage_nav(1)
+    # --- 关卡1进度追踪 & 进入下一关 ---
+    st.markdown("---")
+    st.subheader("📋 关卡进度")
+
+    visited_count = (
+        int(st.session_state.s1_tab1_visited) +
+        int(st.session_state.s1_tab2_visited) +
+        int(st.session_state.s1_tab3_complete)
+    )
+    all_visited = visited_count == 3
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        icon = "✅" if st.session_state.s1_tab1_visited else "⬜"
+        st.markdown(f"{icon} 认识CT数据")
+    with col2:
+        icon = "✅" if st.session_state.s1_tab2_visited else "⬜"
+        st.markdown(f"{icon} 肺窗调节实验")
+    with col3:
+        icon = "✅" if st.session_state.s1_tab3_complete else "⬜"
+        st.markdown(f"{icon} 标记训练数据")
+
+    st.progress(visited_count / 3)
+
+    if not all_visited:
+        st.info("👆 请依次浏览上方三个标签页，每完成一个会打勾。全部完成后解锁下一关。")
+    else:
+        st.success("🎉 所有模块已完成！可以进入下一关。")
+        if st.button("进入下一关 →", type="primary", use_container_width=True):
+            st.session_state.stage = 2
+            if "初识CT" not in st.session_state.achievements:
+                st.session_state.achievements.append("初识CT")
+            st.session_state.stage1_complete = True
+            st.rerun()
 
 
 # ---------- 关卡2: 架构师 ----------
