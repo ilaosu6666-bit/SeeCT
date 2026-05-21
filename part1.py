@@ -200,8 +200,6 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import base64
-import io
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
@@ -213,33 +211,6 @@ from torchvision import transforms
 from torchvision.models import resnet18
 
 # 可选依赖：用于网页端手绘框选
-# streamlit 1.57 移除了 image_to_url，导致 streamlit-drawable-canvas 崩溃。
-# 在导入 canvas 前 monkey-patch 恢复该函数。
-def _patched_image_to_url(
-    image,
-    width: int = 0,
-    clamp: bool = False,
-    channels: str = "RGB",
-    output_format: str = "JPEG",
-    image_id: str = "",
-    allow_emoji: bool = False,
-):
-    import base64 as _b64
-    from io import BytesIO as _BytesIO
-    from PIL.Image import Image as _PILImage
-
-    if isinstance(image, _PILImage):
-        buf = _BytesIO()
-        fmt = "PNG" if output_format.upper() == "JPEG" else output_format.upper()
-        image.save(buf, format=fmt)
-        return f"data:image/{fmt.lower()};base64,{_b64.b64encode(buf.getvalue()).decode()}"
-    return ""
-
-try:
-    st.elements.image.image_to_url = _patched_image_to_url
-except Exception:
-    pass
-
 try:
     from streamlit_drawable_canvas import st_canvas
     HAS_CANVAS = True
@@ -400,72 +371,21 @@ def find_first_image(case_dir: Path) -> Optional[Path]:
 
 
 def _load_image_smart(path: str):
-    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB。
-    返回 RGB PIL Image（经 PNG round-trip 规范化），或 None。"""
+    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
     p = Path(path)
-
-    try:
-        img = None
-
-        if p.suffix.lower() == ".npy":
-            if p.exists():
-                arr = np.load(str(p))
-                img = _npy_to_pil(arr)
-        elif p.exists():
-            img = Image.open(p)
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-        else:
-            npy_path = p.with_suffix(".npy")
-            if npy_path.exists():
-                arr = np.load(str(npy_path))
-                img = _npy_to_pil(arr)
-
-        if img is None:
-            return None
-
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        normalized = Image.open(buf)
-        normalized.load()
-        return normalized
-
-    except Exception:
+    if p.suffix.lower() == ".npy":
+        if p.exists():
+            arr = np.load(str(p))
+            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
+                arr = (arr * 255).astype(np.uint8)
+            return Image.fromarray(arr.astype(np.uint8))
         return None
-
-
-def _npy_to_pil(arr: np.ndarray):
-    """将 numpy 数组转为 RGB PIL Image。兼容 float/uint8/灰度/3通道。"""
-    try:
-        if arr.dtype in (np.float16, np.float32, np.float64, np.float128 if hasattr(np, 'float128') else np.float64):
-            amin, amax = arr.min(), arr.max()
-            if amax > amin:
-                arr = ((arr - amin) / (amax - amin) * 255).astype(np.uint8)
-            else:
-                arr = np.zeros(arr.shape[:2] if arr.ndim >= 2 else arr.shape, dtype=np.uint8)
-
-        if arr.dtype != np.uint8:
-            arr = arr.astype(np.uint8)
-
-        if arr.ndim == 3 and arr.shape[2] > 4:
-            arr = arr[arr.shape[0] // 2]
-
-        if arr.ndim == 2:
-            arr = np.stack([arr, arr, arr], axis=-1)
-        elif arr.ndim == 3 and arr.shape[2] == 1:
-            arr = np.tile(arr, (1, 1, 3))
-        elif arr.ndim == 3 and arr.shape[2] == 4:
-            arr = arr[:, :, :3]
-        elif arr.ndim == 3 and arr.shape[2] == 3:
-            pass
-        else:
-            return None
-
-        img = Image.fromarray(arr, mode="RGB")
-        return img
-    except Exception:
-        return None
+    if p.exists():
+        return Image.open(p).convert("RGB")
+    npy_path = p.with_suffix(".npy")
+    if npy_path.exists():
+        return _load_image_smart(str(npy_path))
+    return None
 
 
 def load_case_meta(case_dir: Path) -> Dict:
@@ -532,6 +452,7 @@ def predict_with_model(model: nn.Module, gradcam: GradCAMHelper, image: Image.Im
 
 
 def predict_with_rule_demo(image: Image.Image) -> Dict:
+    # 规则演示模式：不是医学模型，只用于没有 pt 文件时跑通演示流程
     gray = np.array(image.convert("L"), dtype=np.float32)
     gray_norm = (gray - gray.min()) / (gray.max() - gray.min() + 1e-8)
 
@@ -670,38 +591,45 @@ def render_case_info(meta: Dict):
 
 
 def get_user_mask(image: Image.Image) -> np.ndarray:
-    """获取用户圈选区域。优先画布拖框，不可用时回退滑块。"""
     w, h = image.size
 
     st.markdown("### 用户圈选区域")
+    st.caption("当前使用滑块模式圈选。")
 
+    c1, c2 = st.columns(2)
+    with c1:
+        x = st.slider("左上角 X", 0, max(0, w - 1), int(w * 0.25))
+        rect_w = st.slider("框宽度", 1, max(1, w), int(w * 0.25))
+    with c2:
+        y = st.slider("左上角 Y", 0, max(0, h - 1), int(h * 0.25))
+        rect_h = st.slider("框高度", 1, max(1, h), int(h * 0.25))
+
+    return rectangle_mask((w, h), x, y, rect_w, rect_h)
+
+    st.markdown("### 用户圈选区域")
     if HAS_CANVAS:
-        st.caption("在图上直接拖拽绘制矩形框，框选你关注的区域。")
-        try:
-            canvas_result = st_canvas(
-                fill_color="rgba(0, 255, 0, 0.12)",
-                stroke_width=2,
-                stroke_color="#00ff00",
-                background_image=np.array(image.convert("RGB")),
-                update_streamlit=True,
-                height=h,
-                width=w,
-                drawing_mode="rect",
-                key="canvas",
-            )
+        st.caption("你可以直接在图上拖出一个矩形框。若组件未安装，会自动切换为滑块模式。")
+        canvas_result = st_canvas(
+            fill_color="rgba(0, 255, 0, 0.12)",
+            stroke_width=2,
+            stroke_color="#00ff00",
+            background_image=image,
+            update_streamlit=True,
+            height=h,
+            width=w,
+            drawing_mode="rect",
+            key="canvas",
+        )
 
-            if canvas_result.json_data and len(canvas_result.json_data.get("objects", [])) > 0:
-                obj = canvas_result.json_data["objects"][-1]
-                x = int(obj.get("left", 0))
-                y = int(obj.get("top", 0))
-                rect_w = int(obj.get("width", 1) * obj.get("scaleX", 1))
-                rect_h = int(obj.get("height", 1) * obj.get("scaleY", 1))
-                return rectangle_mask((w, h), x, y, rect_w, rect_h)
+        if canvas_result.json_data and len(canvas_result.json_data.get("objects", [])) > 0:
+            obj = canvas_result.json_data["objects"][-1]
+            x = int(obj.get("left", 0))
+            y = int(obj.get("top", 0))
+            rect_w = int(obj.get("width", 1) * obj.get("scaleX", 1))
+            rect_h = int(obj.get("height", 1) * obj.get("scaleY", 1))
+            return rectangle_mask((w, h), x, y, rect_w, rect_h)
 
-            st.caption("👆 请在图上拖框，或使用下方滑块替代。")
-        except Exception:
-            st.caption("画布加载失败，请使用滑块模式圈选。")
-
+    st.caption("当前使用滑块模式圈选。你也可以安装 `streamlit-drawable-canvas` 获得直接拖框体验。")
     c1, c2 = st.columns(2)
     with c1:
         x = st.slider("左上角 X", 0, max(0, w - 1), int(w * 0.25))

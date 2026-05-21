@@ -5,7 +5,6 @@ AI训练师 — 基于可解释AI的肺结节交互式教学游戏
 玩家扮演AI研究员，从零开发肺结节诊断模型。
 """
 
-import io
 import json
 import os
 import time
@@ -47,80 +46,21 @@ MODEL_CONFIG_PATH = "model_config.json"
 
 
 def load_image_smart(path: str):
-    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB。
-    返回 RGB PIL Image（经 PNG round-trip 规范化），或 None。"""
+    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
     p = Path(path)
-
-    try:
-        img = None
-
-        # ── NPY ──
-        if p.suffix.lower() == ".npy":
-            if p.exists():
-                arr = np.load(str(p))
-                img = _npy_to_pil(arr)
-        # ── 标准图片格式 ──
-        elif p.exists():
-            img = Image.open(p)
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-        # ── 回退：.png → .npy ──
-        else:
-            npy_path = p.with_suffix(".npy")
-            if npy_path.exists():
-                arr = np.load(str(npy_path))
-                img = _npy_to_pil(arr)
-
-        if img is None:
-            return None
-
-        # PNG round-trip 规范化编码，消除 numpy→PIL 内部表示差异
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        normalized = Image.open(buf)
-        normalized.load()
-        return normalized
-
-    except Exception:
+    if p.suffix.lower() == ".npy":
+        if p.exists():
+            arr = np.load(str(p))
+            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
+                arr = (arr * 255).astype(np.uint8)
+            return Image.fromarray(arr.astype(np.uint8))
         return None
-
-
-def _npy_to_pil(arr: np.ndarray):
-    """将 numpy 数组转为 RGB PIL Image。兼容 float/uint8/灰度/3通道。"""
-    try:
-        # 浮点 → 0..255
-        if arr.dtype in (np.float16, np.float32, np.float64, np.float128 if hasattr(np, 'float128') else np.float64):
-            amin, amax = arr.min(), arr.max()
-            if amax > amin:
-                arr = ((arr - amin) / (amax - amin) * 255).astype(np.uint8)
-            else:
-                arr = np.zeros(arr.shape[:2] if arr.ndim >= 2 else arr.shape, dtype=np.uint8)
-
-        # 确保 uint8
-        if arr.dtype != np.uint8:
-            arr = arr.astype(np.uint8)
-
-        # 3D 数组：取中间切片（如果是体积）
-        if arr.ndim == 3 and arr.shape[2] > 4:
-            arr = arr[arr.shape[0] // 2]  # 取 Z 轴中间层
-
-        # 2D 灰度 → RGB
-        if arr.ndim == 2:
-            arr = np.stack([arr, arr, arr], axis=-1)
-        elif arr.ndim == 3 and arr.shape[2] == 1:
-            arr = np.tile(arr, (1, 1, 3))
-        elif arr.ndim == 3 and arr.shape[2] == 4:
-            arr = arr[:, :, :3]  # RGBA → RGB
-        elif arr.ndim == 3 and arr.shape[2] == 3:
-            pass  # 已是 RGB
-        else:
-            return None
-
-        img = Image.fromarray(arr, mode="RGB")
-        return img
-    except Exception:
-        return None
+    if p.exists():
+        return Image.open(p).convert("RGB")
+    npy_path = str(p).rsplit(".", 1)[0] + ".npy"
+    if os.path.exists(npy_path):
+        return load_image_smart(npy_path)
+    return None
 
 VAL_TEST_TRANSFORM = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -399,9 +339,7 @@ def render_stage1():
             for c in case_dirs:
                 meta = load_case_meta(c)
                 img_path = c / meta.get("image", "image.png")
-                # load_image_smart 内部有 .png→.npy 回退逻辑
-                test_load = load_image_smart(str(img_path))
-                if test_load is not None:
+                if img_path.exists():
                     explore.append({
                         "path": str(img_path),
                         "label": meta.get("class", "Lesion"),
@@ -1033,8 +971,7 @@ def render_stage5():
         for case_dir in case_list[:8]:
             meta = load_case_meta(case_dir)
             img_path = case_dir / meta.get("image", "image.png")
-            test_img = load_image_smart(str(img_path))
-            if test_img is not None:
+            if img_path.exists():
                 queue.append({
                     "path": str(img_path),
                     "meta": meta,
@@ -1046,16 +983,12 @@ def render_stage5():
         # 预先计算AI结果
         for item in queue:
             img = load_image_smart(item["path"])
-            if img is not None and model is not None and gradcam is not None:
-                result = _predict_with_model(model, gradcam, img)
-                item["ai_label"] = result["pred_class"]
-                item["ai_conf"] = max(result.get("lesion_prob", 0),
-                                      result.get("normal_prob", 0))
-            else:
-                fallback = _predict_with_rule_demo(img) if img is not None else {"pred_class": "Normal", "lesion_prob": 0.1, "normal_prob": 0.9}
-                item["ai_label"] = fallback["pred_class"]
-                item["ai_conf"] = max(fallback.get("lesion_prob", 0),
-                                      fallback.get("normal_prob", 0))
+            if img is None:
+                continue
+            result = _predict_with_model(model, gradcam, img)
+            item["ai_label"] = result["pred_class"]
+            item["ai_conf"] = max(result.get("lesion_prob", 0),
+                                  result.get("normal_prob", 0))
 
         # AI陷阱：找2个模型confidence低的case，故意标记错误
         low_conf = sorted(queue, key=lambda x: x["ai_conf"])[:2]
@@ -1088,11 +1021,7 @@ def render_stage5():
 
     col1, col2 = st.columns([3, 2])
     with col1:
-        case_img = load_image_smart(item["path"])
-        if case_img:
-            st.image(case_img, caption=f"CT #{current + 1}", width=350)
-        else:
-            st.warning(f"无法加载: {item['path']}")
+        st.image(item["path"], caption=f"CT #{current + 1}", width=350)
 
     with col2:
         st.markdown("### AI辅助")
@@ -1104,9 +1033,10 @@ def render_stage5():
                 if img:
                     result = _predict_with_model(model, gradcam, img)
                     overlay_img = _overlay_heatmap(img, result["cam"])
-                    st.image(overlay_img, caption="AI热力图", width=300)
-            st.metric("AI判断", item["ai_label"])
-            if model is None or gradcam is None:
+                st.image(overlay_img, caption="AI热力图", width=300)
+                st.metric("AI判断", item["ai_label"])
+            else:
+                st.info("AI判断: " + item["ai_label"])
                 st.caption(f"(置信度: {item['ai_conf']:.2%})")
         else:
             st.caption("AI辅助已关闭 — 独立判断模式")

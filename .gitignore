@@ -11,6 +11,5 @@ docx_content.txt
 quick_train.py
 
 *.png
-!**/case_*/image.png
 *.jpg
 seeCT/
