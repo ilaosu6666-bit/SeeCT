@@ -266,6 +266,12 @@ def render_stage1():
             st.info("切片浏览器仅在本地完整版可用。在线版继续体验其他功能。")
             st.session_state.s1_tab1_visited = True
 
+        # 手动确认已浏览
+        if not st.session_state.s1_tab1_visited:
+            if st.button("✓ 我已了解CT数据的基础知识", key="s1_tab1_done"):
+                st.session_state.s1_tab1_visited = True
+                st.rerun()
+
     with tab2:
         st.subheader("肺窗调节实验")
         st.write("""
@@ -333,27 +339,38 @@ def render_stage1():
         else:
             st.info("💡 提示：尝试 WC=-600, WW=1500（临床标准肺窗），观察肺纹理是否变清晰。")
 
+        # 手动确认已浏览
+        if not st.session_state.s1_tab2_visited:
+            if st.button("✓ 我已理解窗宽窗位的概念", key="s1_tab2_done"):
+                st.session_state.s1_tab2_visited = True
+                st.rerun()
+
     with tab3:
         st.subheader("标记训练数据")
         st.write("现在，请你扮演数据标注员，判断以下CT切片中是否含有肺结节。")
 
         if "s1_label_samples" not in st.session_state:
-            lesion_cases = [p for p in Path("cases").iterdir()
-                           if p.is_dir() and p.name.startswith("case_")]
-            normal_cases = [p for p in Path("cases").iterdir()
-                           if p.is_dir() and p.name.startswith("case_")]
-            samples = []
-            for c in lesion_cases[:3]:
+            all_cases = [p for p in Path("cases").iterdir()
+                        if p.is_dir() and p.name.startswith("case_")]
+            lesion_samples = []
+            normal_samples = []
+            for c in all_cases:
                 meta = load_case_meta(c)
+                cls = meta.get("class", "")
                 img_path = c / meta.get("image", "image.png")
                 if img_path.exists():
-                    samples.append((str(img_path), meta.get("class", "Lesion"), meta.get("title", "")))
-            for c in normal_cases[4:6]:
-                meta = load_case_meta(c)
-                img_path = c / meta.get("image", "image.png")
-                if img_path.exists():
-                    samples.append((str(img_path), meta.get("class", "Normal"), meta.get("title", "")))
+                    entry = (str(img_path), cls, meta.get("title", ""))
+                    if cls == "Lesion":
+                        lesion_samples.append(entry)
+                    else:
+                        normal_samples.append(entry)
+            # 各取最多3个，混合后打乱
+            samples = lesion_samples[:3] + normal_samples[:3]
             random.shuffle(samples)
+            if len(samples) < 2:
+                # 极端情况：只有一种类型，全取
+                samples = lesion_samples + normal_samples
+                random.shuffle(samples)
             st.session_state["s1_label_samples"] = samples[:6]
             st.session_state["s1_label_answers"] = {}
             st.session_state["s1_label_revealed"] = set()
@@ -362,10 +379,16 @@ def render_stage1():
         answers = st.session_state["s1_label_answers"]
         revealed = st.session_state["s1_label_revealed"]
 
+        if len(samples) == 0:
+            st.warning("暂无标注样本。请先运行 build_case_library.py 构建病例库。")
         for i, (img_path, true_label, title) in enumerate(samples):
             cols = st.columns([1, 1, 1])
             with cols[0]:
-                st.image(img_path, caption=f"样本 {i+1}", width=250)
+                disp_img = load_image_smart(img_path)
+                if disp_img:
+                    st.image(disp_img, caption=f"样本 {i+1}", width=250)
+                else:
+                    st.error(f"图片加载失败: {img_path}")
             with cols[1]:
                 if i not in revealed:
                     user_label = st.radio(
