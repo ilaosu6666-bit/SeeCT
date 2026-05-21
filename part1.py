@@ -200,6 +200,8 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import base64
+import io
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
@@ -597,11 +599,17 @@ def get_user_mask(image: Image.Image) -> np.ndarray:
 
     if HAS_CANVAS:
         st.caption("在图上直接拖拽绘制矩形框，框选你关注的区域。")
+        # 手动转 data URL，绕过 streamlit 1.57+ 移除的 image_to_url
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        img_url = f"data:image/png;base64,{img_b64}"
+
         canvas_result = st_canvas(
             fill_color="rgba(0, 255, 0, 0.12)",
             stroke_width=2,
             stroke_color="#00ff00",
-            background_image=image,
+            background_image=img_url,
             update_streamlit=True,
             height=h,
             width=w,
