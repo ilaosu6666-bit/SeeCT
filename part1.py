@@ -400,32 +400,37 @@ def find_first_image(case_dir: Path) -> Optional[Path]:
 
 
 def _load_image_smart(path: str):
-    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB，保证返回 RGB PIL Image 或 None。"""
+    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB。
+    返回 RGB PIL Image（经 PNG round-trip 规范化），或 None。"""
     p = Path(path)
 
     try:
+        img = None
+
         if p.suffix.lower() == ".npy":
             if p.exists():
                 arr = np.load(str(p))
                 img = _npy_to_pil(arr)
-                if img is not None:
-                    return img
-            return None
-
-        if p.exists():
+        elif p.exists():
             img = Image.open(p)
             if img.mode != "RGB":
                 img = img.convert("RGB")
-            return img
+        else:
+            npy_path = p.with_suffix(".npy")
+            if npy_path.exists():
+                arr = np.load(str(npy_path))
+                img = _npy_to_pil(arr)
 
-        npy_path = p.with_suffix(".npy")
-        if npy_path.exists():
-            arr = np.load(str(npy_path))
-            img = _npy_to_pil(arr)
-            if img is not None:
-                return img
+        if img is None:
+            return None
 
-        return None
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        normalized = Image.open(buf)
+        normalized.load()
+        return normalized
+
     except Exception:
         return None
 

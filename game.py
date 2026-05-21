@@ -5,6 +5,7 @@ AI训练师 — 基于可解释AI的肺结节交互式教学游戏
 玩家扮演AI研究员，从零开发肺结节诊断模型。
 """
 
+import io
 import json
 import os
 import time
@@ -46,35 +47,41 @@ MODEL_CONFIG_PATH = "model_config.json"
 
 
 def load_image_smart(path: str):
-    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB，保证返回 RGB PIL Image 或 None。"""
+    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB。
+    返回 RGB PIL Image（经 PNG round-trip 规范化），或 None。"""
     p = Path(path)
 
     try:
+        img = None
+
         # ── NPY ──
         if p.suffix.lower() == ".npy":
             if p.exists():
                 arr = np.load(str(p))
                 img = _npy_to_pil(arr)
-                if img is not None:
-                    return img
-            return None
-
         # ── 标准图片格式 ──
-        if p.exists():
+        elif p.exists():
             img = Image.open(p)
             if img.mode != "RGB":
                 img = img.convert("RGB")
-            return img
+        # ── 回退：.png → .npy ──
+        else:
+            npy_path = p.with_suffix(".npy")
+            if npy_path.exists():
+                arr = np.load(str(npy_path))
+                img = _npy_to_pil(arr)
 
-        # ── 回退：文件名 .png → .npy ──
-        npy_path = p.with_suffix(".npy")
-        if npy_path.exists():
-            arr = np.load(str(npy_path))
-            img = _npy_to_pil(arr)
-            if img is not None:
-                return img
+        if img is None:
+            return None
 
-        return None
+        # PNG round-trip 规范化编码，消除 numpy→PIL 内部表示差异
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        normalized = Image.open(buf)
+        normalized.load()
+        return normalized
+
     except Exception:
         return None
 
@@ -1026,7 +1033,8 @@ def render_stage5():
         for case_dir in case_list[:8]:
             meta = load_case_meta(case_dir)
             img_path = case_dir / meta.get("image", "image.png")
-            if img_path.exists():
+            test_img = load_image_smart(str(img_path))
+            if test_img is not None:
                 queue.append({
                     "path": str(img_path),
                     "meta": meta,
@@ -1038,12 +1046,16 @@ def render_stage5():
         # 预先计算AI结果
         for item in queue:
             img = load_image_smart(item["path"])
-            if img is None:
-                continue
-            result = _predict_with_model(model, gradcam, img)
-            item["ai_label"] = result["pred_class"]
-            item["ai_conf"] = max(result.get("lesion_prob", 0),
-                                  result.get("normal_prob", 0))
+            if img is not None and model is not None and gradcam is not None:
+                result = _predict_with_model(model, gradcam, img)
+                item["ai_label"] = result["pred_class"]
+                item["ai_conf"] = max(result.get("lesion_prob", 0),
+                                      result.get("normal_prob", 0))
+            else:
+                fallback = _predict_with_rule_demo(img) if img is not None else {"pred_class": "Normal", "lesion_prob": 0.1, "normal_prob": 0.9}
+                item["ai_label"] = fallback["pred_class"]
+                item["ai_conf"] = max(fallback.get("lesion_prob", 0),
+                                      fallback.get("normal_prob", 0))
 
         # AI陷阱：找2个模型confidence低的case，故意标记错误
         low_conf = sorted(queue, key=lambda x: x["ai_conf"])[:2]
@@ -1076,7 +1088,11 @@ def render_stage5():
 
     col1, col2 = st.columns([3, 2])
     with col1:
-        st.image(item["path"], caption=f"CT #{current + 1}", width=350)
+        case_img = load_image_smart(item["path"])
+        if case_img:
+            st.image(case_img, caption=f"CT #{current + 1}", width=350)
+        else:
+            st.warning(f"无法加载: {item['path']}")
 
     with col2:
         st.markdown("### AI辅助")
@@ -1088,10 +1104,9 @@ def render_stage5():
                 if img:
                     result = _predict_with_model(model, gradcam, img)
                     overlay_img = _overlay_heatmap(img, result["cam"])
-                st.image(overlay_img, caption="AI热力图", width=300)
-                st.metric("AI判断", item["ai_label"])
-            else:
-                st.info("AI判断: " + item["ai_label"])
+                    st.image(overlay_img, caption="AI热力图", width=300)
+            st.metric("AI判断", item["ai_label"])
+            if model is None or gradcam is None:
                 st.caption(f"(置信度: {item['ai_conf']:.2%})")
         else:
             st.caption("AI辅助已关闭 — 独立判断模式")
