@@ -45,92 +45,6 @@ GRADCAM_DIR = os.path.join("loss_fig", "gradcam_epochs")
 MODEL_CONFIG_PATH = "model_config.json"
 
 
-def _prepare_dq_samples():
-    """为关卡1的Tab3准备数据质量判断样本。
-
-    基于一张真实CT图生成6个变体：3个质量合格 + 3个质量缺陷，
-    缺陷类型包括模糊、过暗、噪点等——都是外行能用肉眼判断的。
-    """
-    import cv2
-
-    # 找一张真实CT图做基底
-    base_img = None
-    for case_dir in Path("cases").iterdir():
-        if case_dir.is_dir() and case_dir.name.startswith("case_"):
-            img_path = case_dir / "image.png"
-            if img_path.exists():
-                base_img = cv2.imread(str(img_path))
-                if base_img is not None:
-                    break
-    if base_img is None:
-        # fallback: 纯灰底图
-        base_img = np.full((400, 400, 3), 128, dtype=np.uint8)
-
-    # 统一缩放到合适大小
-    base_img = cv2.resize(base_img, (400, 400))
-    base_rgb = cv2.cvtColor(base_img, cv2.COLOR_BGR2RGB)
-
-    samples = []
-
-    # 1. 清晰原图 → 保留
-    samples.append({
-        "image": base_rgb,
-        "description": "清晰CT图像，对比度正常",
-        "answer": "keep",
-    })
-
-    # 2. 高斯模糊 → 丢弃
-    blur = cv2.GaussianBlur(base_img, (15, 15), 10)
-    samples.append({
-        "image": cv2.cvtColor(blur, cv2.COLOR_BGR2RGB),
-        "description": "图像模糊，细节丢失",
-        "answer": "discard",
-        "explain": "模糊的图像会让AI无法分辨细微的结节边缘，不适合训练。",
-    })
-
-    # 3. 过暗 → 丢弃
-    dark = (base_img.astype(np.float32) * 0.3).clip(0, 255).astype(np.uint8)
-    samples.append({
-        "image": cv2.cvtColor(dark, cv2.COLOR_BGR2RGB),
-        "description": "亮度过低，难以辨认",
-        "answer": "discard",
-        "explain": "过暗的图像会丢失大量组织细节，AI无法从中学习有效特征。",
-    })
-
-    # 4. 好的对比度 → 保留
-    enhanced = cv2.convertScaleAbs(base_img, alpha=1.2, beta=5)
-    samples.append({
-        "image": cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB),
-        "description": "对比度良好，边缘锐利",
-        "answer": "keep",
-    })
-
-    # 5. 椒盐噪点 → 丢弃
-    noise = base_img.copy()
-    salt = np.random.random(noise.shape[:2]) < 0.05
-    pepper = np.random.random(noise.shape[:2]) < 0.05
-    noise[salt] = [255, 255, 255]
-    noise[pepper] = [0, 0, 0]
-    samples.append({
-        "image": cv2.cvtColor(noise, cv2.COLOR_BGR2RGB),
-        "description": "大量随机噪点干扰",
-        "answer": "discard",
-        "explain": "噪点会干扰AI的注意力机制，导致模型学到虚假的模式。",
-    })
-
-    # 6. 清晰 + 正常亮度 → 保留
-    normal = base_img.copy()
-    samples.append({
-        "image": cv2.cvtColor(normal, cv2.COLOR_BGR2RGB),
-        "description": "正常曝光，肺纹理清晰可见",
-        "answer": "keep",
-    })
-
-    # 打乱顺序
-    random.shuffle(samples)
-    st.session_state.s1_dq_samples = samples
-
-
 def load_image_smart(path: str):
     """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
     p = Path(path)
@@ -411,67 +325,73 @@ def render_stage1():
             st.info("💡 提示：尝试 WC=-600, WW=1500（临床标准肺窗），观察肺纹理是否变清晰。")
 
     with tab3:
-        st.subheader("🔬 数据质量筛选员")
-        st.write("""
-        AI模型的好坏**高度依赖训练数据的质量**。在送入模型之前，数据需要经过严格筛选。
+        st.subheader("标记训练数据")
+        st.write("现在，请你扮演数据标注员，判断以下CT切片中是否含有肺结节。")
 
-        你的任务：扮演数据质检员，判断以下CT图像**是否适合用于AI训练**。
-        标准很简单——图像清晰、结构完整、对比度正常的图片才是好数据。
-        """)
+        if "s1_label_samples" not in st.session_state:
+            lesion_cases = [p for p in Path("cases").iterdir()
+                           if p.is_dir() and p.name.startswith("case_")]
+            normal_cases = [p for p in Path("cases").iterdir()
+                           if p.is_dir() and p.name.startswith("case_")]
+            samples = []
+            for c in lesion_cases[:3]:
+                meta = load_case_meta(c)
+                img_path = c / meta.get("image", "image.png")
+                if img_path.exists():
+                    samples.append((str(img_path), meta.get("class", "Lesion"), meta.get("title", "")))
+            for c in normal_cases[4:6]:
+                meta = load_case_meta(c)
+                img_path = c / meta.get("image", "image.png")
+                if img_path.exists():
+                    samples.append((str(img_path), meta.get("class", "Normal"), meta.get("title", "")))
+            random.shuffle(samples)
+            st.session_state["s1_label_samples"] = samples[:6]
+            st.session_state["s1_label_answers"] = {}
+            st.session_state["s1_label_revealed"] = set()
 
-        # 准备数据质量判断样本
-        if "s1_dq_samples" not in st.session_state:
-            _prepare_dq_samples()
-        if "s1_dq_revealed" not in st.session_state:
-            st.session_state.s1_dq_revealed = set()
-        if "s1_dq_answers" not in st.session_state:
-            st.session_state.s1_dq_answers = {}
+        samples = st.session_state["s1_label_samples"]
+        answers = st.session_state["s1_label_answers"]
+        revealed = st.session_state["s1_label_revealed"]
 
-        samples = st.session_state.s1_dq_samples
-        answers = st.session_state.s1_dq_answers
-        revealed = st.session_state.s1_dq_revealed
-
-        for i, item in enumerate(samples):
-            cols = st.columns([2, 1, 1])
+        for i, (img_path, true_label, title) in enumerate(samples):
+            cols = st.columns([1, 1, 1])
             with cols[0]:
-                st.image(item["image"], caption=f"样本 {i+1}: {item['description']}",
-                         width=350)
+                st.image(img_path, caption=f"样本 {i+1}", width=250)
             with cols[1]:
                 if i not in revealed:
-                    user_choice = st.radio(
-                        f"是否适合训练? #{i+1}",
-                        ["✅ 保留 — 适合训练", "❌ 丢弃 — 质量不达标"],
-                        key=f"s1_dq_{i}",
+                    user_label = st.radio(
+                        f"你的判断 #{i+1}",
+                        ["有结节 (Lesion)", "无结节 (Normal)"],
+                        key=f"s1_label_{i}",
                         index=None
                     )
-                    if user_choice and st.button(f"确认 #{i+1}", key=f"s1_dq_confirm_{i}"):
-                        answers[i] = "keep" if "保留" in user_choice else "discard"
-                        revealed.add(i)
-                        if answers[i] == item["answer"]:
-                            st.session_state.score += 5
-                            st.session_state.data_label_score += 5
+                    if user_label and st.button(f"确认 #{i+1}", key=f"s1_confirm_{i}"):
+                        answers[i] = "Lesion" if "有结节" in user_label else "Normal"
+                        st.session_state["s1_label_revealed"].add(i)
+                        if answers[i] == true_label:
+                            st.session_state.score += 10
+                            st.session_state.data_label_score += 10
                         st.rerun()
                 else:
-                    user_ans = answers.get(i)
-                    is_correct = user_ans == item["answer"]
-                    st.markdown(f"**你的判断:** {'保留' if user_ans == 'keep' else '丢弃'}")
-                    st.markdown(f"**正确答案:** {'保留' if item['answer'] == 'keep' else '丢弃'}")
+                    user_ans = answers.get(i, "未作答")
+                    is_correct = user_ans == true_label
+                    st.markdown(f"**你的判断:** {user_ans}")
+                    st.markdown(f"**真实标签:** {true_label}")
                     if is_correct:
-                        st.success("✅ 正确! (+5分)")
+                        st.success("✅ 正确! (+10分)")
                     else:
                         st.error("❌ 有偏差")
-                        st.caption(item.get("explain", ""))
+                        st.caption("学习提示：正常血管断面和钙化点容易与结节混淆。"
+                                   "浏览相邻切片有助于判断。")
 
         all_done = len(revealed) == len(samples) and len(samples) > 0
         if all_done:
-            correct = len([i for i in revealed
-                          if answers.get(i) == samples[i]["answer"]])
-            accuracy = correct / max(1, len(samples))
+            accuracy = len([i for i in revealed if answers.get(i) == samples[i][1]]) / max(1, len(samples))
             st.markdown("---")
-            st.subheader("📊 数据质检报告")
+            st.subheader("📊 数据收集报告")
             col1, col2, col3 = st.columns(3)
-            col1.metric("筛查总数", len(samples))
-            col2.metric("正确筛选", correct)
+            col1.metric("标注总数", len(samples))
+            col2.metric("正确数", len([i for i in revealed if answers.get(i) == samples[i][1]]))
             col3.metric("准确率", f"{accuracy:.0%}")
 
             if accuracy >= 0.8:
@@ -481,15 +401,13 @@ def render_stage1():
                     st.session_state.score += 10
 
             st.info("""
-            ### 💡 数据质量决定AI的上限
+            ### 💡 数据标注的重要性
+            训练AI的第一步就是准备**标注数据**。AI学到的所有知识都来自于标注样本。
+            - 标注质量差 → AI学到错误判断
+            - 标注数据少 → AI泛化能力弱
+            - 标注偏差 → AI可能产生系统性误判
 
-            再好的模型架构也无法从**劣质数据**中学到正确判断：
-            - 模糊图像 → AI学到的特征也是模糊的
-            - 过暗/过亮 → AI可能把亮度差异误判为病变
-            - 带有伪影 → AI的注意力会被无关物体吸引
-
-            医学AI对数据质量的要求尤其严格，因为每一张不合格的训练图片都可能
-            导致AI在实际诊断中犯错。**数据清洗**是整个流程中最枯燥但最重要的一步。
+            这正是为什么医学AI需要大量专家标注数据！
             """)
 
             st.session_state.s1_tab3_complete = True
