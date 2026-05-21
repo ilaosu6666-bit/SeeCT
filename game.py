@@ -339,7 +339,9 @@ def render_stage1():
             for c in case_dirs:
                 meta = load_case_meta(c)
                 img_path = c / meta.get("image", "image.png")
-                if img_path.exists():
+                # load_image_smart 内部有 .png→.npy 回退逻辑
+                test_load = load_image_smart(str(img_path))
+                if test_load is not None:
                     explore.append({
                         "path": str(img_path),
                         "label": meta.get("class", "Lesion"),
