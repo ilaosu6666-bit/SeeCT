@@ -56,7 +56,16 @@ def load_image_smart(path: str):
             return Image.fromarray(arr.astype(np.uint8))
         return None
     if p.exists():
-        return Image.open(p).convert("RGB")
+        img = Image.open(p)
+        if img.mode in ("I;16", "I;16B", "I"):
+            arr = np.array(img, dtype=np.float32)
+            arr_max = arr.max()
+            if arr_max > 0:
+                arr = (arr / arr_max * 255).astype(np.uint8)
+            else:
+                arr = arr.astype(np.uint8)
+            img = Image.fromarray(arr)
+        return img.convert("RGB")
     npy_path = str(p).rsplit(".", 1)[0] + ".npy"
     if os.path.exists(npy_path):
         return load_image_smart(npy_path)
