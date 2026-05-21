@@ -599,35 +599,30 @@ def get_user_mask(image: Image.Image) -> np.ndarray:
 
     if HAS_CANVAS:
         st.caption("在图上直接拖拽绘制矩形框，框选你关注的区域。")
-        # 手动转 data URL，绕过 streamlit 1.57+ 移除的 image_to_url
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        img_url = f"data:image/png;base64,{img_b64}"
+        try:
+            canvas_result = st_canvas(
+                fill_color="rgba(0, 255, 0, 0.12)",
+                stroke_width=2,
+                stroke_color="#00ff00",
+                background_image=np.array(image.convert("RGB")),
+                update_streamlit=True,
+                height=h,
+                width=w,
+                drawing_mode="rect",
+                key="canvas",
+            )
 
-        canvas_result = st_canvas(
-            fill_color="rgba(0, 255, 0, 0.12)",
-            stroke_width=2,
-            stroke_color="#00ff00",
-            background_image=img_url,
-            update_streamlit=True,
-            height=h,
-            width=w,
-            drawing_mode="rect",
-            key="canvas",
-        )
+            if canvas_result.json_data and len(canvas_result.json_data.get("objects", [])) > 0:
+                obj = canvas_result.json_data["objects"][-1]
+                x = int(obj.get("left", 0))
+                y = int(obj.get("top", 0))
+                rect_w = int(obj.get("width", 1) * obj.get("scaleX", 1))
+                rect_h = int(obj.get("height", 1) * obj.get("scaleY", 1))
+                return rectangle_mask((w, h), x, y, rect_w, rect_h)
 
-        if canvas_result.json_data and len(canvas_result.json_data.get("objects", [])) > 0:
-            obj = canvas_result.json_data["objects"][-1]
-            x = int(obj.get("left", 0))
-            y = int(obj.get("top", 0))
-            rect_w = int(obj.get("width", 1) * obj.get("scaleX", 1))
-            rect_h = int(obj.get("height", 1) * obj.get("scaleY", 1))
-            return rectangle_mask((w, h), x, y, rect_w, rect_h)
-
-        st.caption("👆 请在图上拖框，或使用下方滑块替代。")
-    else:
-        st.caption("画布组件未安装，使用滑块模式。安装 `streamlit-drawable-canvas` 可启用直接拖框。")
+            st.caption("👆 请在图上拖框，或使用下方滑块替代。")
+        except Exception:
+            st.caption("画布加载失败，请使用滑块模式圈选。")
 
     c1, c2 = st.columns(2)
     with c1:
