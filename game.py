@@ -325,89 +325,91 @@ def render_stage1():
             st.info("💡 提示：尝试 WC=-600, WW=1500（临床标准肺窗），观察肺纹理是否变清晰。")
 
     with tab3:
-        st.subheader("标记训练数据")
-        st.write("现在，请你扮演数据标注员，判断以下CT切片中是否含有肺结节。")
+        st.subheader("训练数据探秘")
+        st.write("""
+        AI不是天生就会判断结节的——它需要从大量**已标注**的CT图像中学习。
+        下面来看看专家是怎么标注训练数据的，体验一下这张CT的"标签"从何而来。
+        """)
 
-        if "s1_label_samples" not in st.session_state:
-            lesion_cases = [p for p in Path("cases").iterdir()
-                           if p.is_dir() and p.name.startswith("case_")]
-            normal_cases = [p for p in Path("cases").iterdir()
-                           if p.is_dir() and p.name.startswith("case_")]
-            samples = []
-            for c in lesion_cases[:3]:
+        # 准备预标注样本（全部来自病例库）
+        if "s1_explore_samples" not in st.session_state:
+            case_dirs = [p for p in Path("cases").iterdir()
+                        if p.is_dir() and p.name.startswith("case_")]
+            explore = []
+            for c in case_dirs:
                 meta = load_case_meta(c)
                 img_path = c / meta.get("image", "image.png")
                 if img_path.exists():
-                    samples.append((str(img_path), meta.get("class", "Lesion"), meta.get("title", "")))
-            for c in normal_cases[4:6]:
-                meta = load_case_meta(c)
-                img_path = c / meta.get("image", "image.png")
-                if img_path.exists():
-                    samples.append((str(img_path), meta.get("class", "Normal"), meta.get("title", "")))
-            random.shuffle(samples)
-            st.session_state["s1_label_samples"] = samples[:6]
-            st.session_state["s1_label_answers"] = {}
-            st.session_state["s1_label_revealed"] = set()
+                    explore.append({
+                        "path": str(img_path),
+                        "label": meta.get("class", "Lesion"),
+                        "title": meta.get("title", c.name),
+                        "desc": meta.get("description", ""),
+                    })
+            random.shuffle(explore)
+            st.session_state["s1_explore_samples"] = explore[:6]
+            st.session_state["s1_explore_viewed"] = 0
 
-        samples = st.session_state["s1_label_samples"]
-        answers = st.session_state["s1_label_answers"]
-        revealed = st.session_state["s1_label_revealed"]
+        explore_samples = st.session_state["s1_explore_samples"]
 
-        for i, (img_path, true_label, title) in enumerate(samples):
-            cols = st.columns([1, 1, 1])
-            with cols[0]:
-                st.image(img_path, caption=f"样本 {i+1}", width=250)
-            with cols[1]:
-                if i not in revealed:
-                    user_label = st.radio(
-                        f"你的判断 #{i+1}",
-                        ["有结节 (Lesion)", "无结节 (Normal)"],
-                        key=f"s1_label_{i}",
-                        index=None
-                    )
-                    if user_label and st.button(f"确认 #{i+1}", key=f"s1_confirm_{i}"):
-                        answers[i] = "Lesion" if "有结节" in user_label else "Normal"
-                        st.session_state["s1_label_revealed"].add(i)
-                        if answers[i] == true_label:
-                            st.session_state.score += 10
-                            st.session_state.data_label_score += 10
-                        st.rerun()
-                else:
-                    user_ans = answers.get(i, "未作答")
-                    is_correct = user_ans == true_label
-                    st.markdown(f"**你的判断:** {user_ans}")
-                    st.markdown(f"**真实标签:** {true_label}")
-                    if is_correct:
-                        st.success("✅ 正确! (+10分)")
+        if len(explore_samples) == 0:
+            st.warning("病例库为空，请先运行 build_case_library.py 构建病例数据。")
+            st.session_state.s1_tab3_complete = True
+        else:
+            st.caption(f"共 {len(explore_samples)} 张已标注样本，请逐张浏览观察。")
+
+            for i, sample in enumerate(explore_samples):
+                st.markdown(f"### 样本 {i+1}: {sample['title']}")
+                img = load_image_smart(sample["path"])
+                if img is None:
+                    continue
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(img, caption="原始CT图像", width=350)
+                with col2:
+                    # 展示专家标注信息卡片
+                    label_class = sample["label"]
+                    label_color = "red" if label_class == "Lesion" else "green"
+                    st.markdown(f"**专家标注:** :{label_color}[{label_class}]")
+                    if sample["desc"]:
+                        st.caption(f"描述: {sample['desc']}")
+                    st.markdown("---")
+                    st.write("**这张图的特征:**")
+                    if label_class == "Lesion":
+                        st.write("🔴 肺实质内可见**异常密度影**（结节/病灶）")
+                        st.write("📌 专家已在结节区域做标记")
                     else:
-                        st.error("❌ 有偏差")
-                        st.caption("学习提示：正常血管断面和钙化点容易与结节混淆。"
-                                   "浏览相邻切片有助于判断。")
+                        st.write("🟢 肺实质清晰，**无明显异常密度影**")
+                        st.write("📌 专家确认此切片可用于正常对照")
+                    st.write("---")
+                    st.caption("💡 AI就是通过成千上万张这样的标注图像，"
+                              "学会区分'有结节'和'无结节'的。")
 
-        all_done = len(revealed) == len(samples) and len(samples) > 0
-        if all_done:
-            accuracy = len([i for i in revealed if answers.get(i) == samples[i][1]]) / max(1, len(samples))
             st.markdown("---")
-            st.subheader("📊 数据收集报告")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("标注总数", len(samples))
-            col2.metric("正确数", len([i for i in revealed if answers.get(i) == samples[i][1]]))
-            col3.metric("准确率", f"{accuracy:.0%}")
+            st.subheader("📊 你的观察报告")
+            st.write("你已经浏览了全部样本。回顾一下你看到了什么：")
 
-            if accuracy >= 0.8:
-                st.success("🏆 成就解锁: 火眼金睛")
-                if "火眼金睛" not in st.session_state.achievements:
-                    st.session_state.achievements.append("火眼金睛")
-                    st.session_state.score += 10
+            lesion_count = len([s for s in explore_samples if s["label"] == "Lesion"])
+            normal_count = len(explore_samples) - lesion_count
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("🔴 有结节样本", f"{lesion_count} 张")
+            with col2:
+                st.metric("🟢 正常样本", f"{normal_count} 张")
 
             st.info("""
             ### 💡 数据标注的重要性
-            训练AI的第一步就是准备**标注数据**。AI学到的所有知识都来自于标注样本。
-            - 标注质量差 → AI学到错误判断
-            - 标注数据少 → AI泛化能力弱
-            - 标注偏差 → AI可能产生系统性误判
 
-            这正是为什么医学AI需要大量专家标注数据！
+            训练AI的第一步就是准备**标注数据**。AI学到的所有知识都来自于这些专家标注：
+
+            - **标注质量差** → AI学到错误判断（把血管当结节）
+            - **标注数据少** → AI没见过足够多的病例，泛化能力弱
+            - **标注偏差** → 如果只标注大结节，AI会漏掉小结节
+
+            在现实中，需要**多位放射科医生**共同标注同一张CT，才能保证标签的准确性。
+            这正是医学AI开发中最昂贵、最耗时的环节！
             """)
 
             st.session_state.s1_tab3_complete = True
