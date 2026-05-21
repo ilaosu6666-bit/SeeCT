@@ -46,21 +46,74 @@ MODEL_CONFIG_PATH = "model_config.json"
 
 
 def load_image_smart(path: str):
-    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
+    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB，保证返回 RGB PIL Image 或 None。"""
     p = Path(path)
-    if p.suffix.lower() == ".npy":
+
+    try:
+        # ── NPY ──
+        if p.suffix.lower() == ".npy":
+            if p.exists():
+                arr = np.load(str(p))
+                img = _npy_to_pil(arr)
+                if img is not None:
+                    return img
+            return None
+
+        # ── 标准图片格式 ──
         if p.exists():
-            arr = np.load(str(p))
-            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
-                arr = (arr * 255).astype(np.uint8)
-            return Image.fromarray(arr.astype(np.uint8))
+            img = Image.open(p)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            return img
+
+        # ── 回退：文件名 .png → .npy ──
+        npy_path = p.with_suffix(".npy")
+        if npy_path.exists():
+            arr = np.load(str(npy_path))
+            img = _npy_to_pil(arr)
+            if img is not None:
+                return img
+
         return None
-    if p.exists():
-        return Image.open(p).convert("RGB")
-    npy_path = str(p).rsplit(".", 1)[0] + ".npy"
-    if os.path.exists(npy_path):
-        return load_image_smart(npy_path)
-    return None
+    except Exception:
+        return None
+
+
+def _npy_to_pil(arr: np.ndarray):
+    """将 numpy 数组转为 RGB PIL Image。兼容 float/uint8/灰度/3通道。"""
+    try:
+        # 浮点 → 0..255
+        if arr.dtype in (np.float16, np.float32, np.float64, np.float128 if hasattr(np, 'float128') else np.float64):
+            amin, amax = arr.min(), arr.max()
+            if amax > amin:
+                arr = ((arr - amin) / (amax - amin) * 255).astype(np.uint8)
+            else:
+                arr = np.zeros(arr.shape[:2] if arr.ndim >= 2 else arr.shape, dtype=np.uint8)
+
+        # 确保 uint8
+        if arr.dtype != np.uint8:
+            arr = arr.astype(np.uint8)
+
+        # 3D 数组：取中间切片（如果是体积）
+        if arr.ndim == 3 and arr.shape[2] > 4:
+            arr = arr[arr.shape[0] // 2]  # 取 Z 轴中间层
+
+        # 2D 灰度 → RGB
+        if arr.ndim == 2:
+            arr = np.stack([arr, arr, arr], axis=-1)
+        elif arr.ndim == 3 and arr.shape[2] == 1:
+            arr = np.tile(arr, (1, 1, 3))
+        elif arr.ndim == 3 and arr.shape[2] == 4:
+            arr = arr[:, :, :3]  # RGBA → RGB
+        elif arr.ndim == 3 and arr.shape[2] == 3:
+            pass  # 已是 RGB
+        else:
+            return None
+
+        img = Image.fromarray(arr, mode="RGB")
+        return img
+    except Exception:
+        return None
 
 VAL_TEST_TRANSFORM = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),

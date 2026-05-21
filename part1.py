@@ -400,21 +400,67 @@ def find_first_image(case_dir: Path) -> Optional[Path]:
 
 
 def _load_image_smart(path: str):
-    """加载图片，优先PNG→NPY。NPY用numpy直接读。"""
+    """健壮的图片加载：自动处理 PNG/NPY/float/uint8/灰度/RGB，保证返回 RGB PIL Image 或 None。"""
     p = Path(path)
-    if p.suffix.lower() == ".npy":
+
+    try:
+        if p.suffix.lower() == ".npy":
+            if p.exists():
+                arr = np.load(str(p))
+                img = _npy_to_pil(arr)
+                if img is not None:
+                    return img
+            return None
+
         if p.exists():
-            arr = np.load(str(p))
-            if arr.dtype in (np.float64, np.float32) and arr.max() <= 1.0:
-                arr = (arr * 255).astype(np.uint8)
-            return Image.fromarray(arr.astype(np.uint8))
+            img = Image.open(p)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            return img
+
+        npy_path = p.with_suffix(".npy")
+        if npy_path.exists():
+            arr = np.load(str(npy_path))
+            img = _npy_to_pil(arr)
+            if img is not None:
+                return img
+
         return None
-    if p.exists():
-        return Image.open(p).convert("RGB")
-    npy_path = p.with_suffix(".npy")
-    if npy_path.exists():
-        return _load_image_smart(str(npy_path))
-    return None
+    except Exception:
+        return None
+
+
+def _npy_to_pil(arr: np.ndarray):
+    """将 numpy 数组转为 RGB PIL Image。兼容 float/uint8/灰度/3通道。"""
+    try:
+        if arr.dtype in (np.float16, np.float32, np.float64, np.float128 if hasattr(np, 'float128') else np.float64):
+            amin, amax = arr.min(), arr.max()
+            if amax > amin:
+                arr = ((arr - amin) / (amax - amin) * 255).astype(np.uint8)
+            else:
+                arr = np.zeros(arr.shape[:2] if arr.ndim >= 2 else arr.shape, dtype=np.uint8)
+
+        if arr.dtype != np.uint8:
+            arr = arr.astype(np.uint8)
+
+        if arr.ndim == 3 and arr.shape[2] > 4:
+            arr = arr[arr.shape[0] // 2]
+
+        if arr.ndim == 2:
+            arr = np.stack([arr, arr, arr], axis=-1)
+        elif arr.ndim == 3 and arr.shape[2] == 1:
+            arr = np.tile(arr, (1, 1, 3))
+        elif arr.ndim == 3 and arr.shape[2] == 4:
+            arr = arr[:, :, :3]
+        elif arr.ndim == 3 and arr.shape[2] == 3:
+            pass
+        else:
+            return None
+
+        img = Image.fromarray(arr, mode="RGB")
+        return img
+    except Exception:
+        return None
 
 
 def load_case_meta(case_dir: Path) -> Dict:
