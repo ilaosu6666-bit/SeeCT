@@ -213,6 +213,33 @@ from torchvision import transforms
 from torchvision.models import resnet18
 
 # 可选依赖：用于网页端手绘框选
+# streamlit 1.57 移除了 image_to_url，导致 streamlit-drawable-canvas 崩溃。
+# 在导入 canvas 前 monkey-patch 恢复该函数。
+def _patched_image_to_url(
+    image,
+    width: int = 0,
+    clamp: bool = False,
+    channels: str = "RGB",
+    output_format: str = "JPEG",
+    image_id: str = "",
+    allow_emoji: bool = False,
+):
+    import base64 as _b64
+    from io import BytesIO as _BytesIO
+    from PIL.Image import Image as _PILImage
+
+    if isinstance(image, _PILImage):
+        buf = _BytesIO()
+        fmt = "PNG" if output_format.upper() == "JPEG" else output_format.upper()
+        image.save(buf, format=fmt)
+        return f"data:image/{fmt.lower()};base64,{_b64.b64encode(buf.getvalue()).decode()}"
+    return ""
+
+try:
+    st.elements.image.image_to_url = _patched_image_to_url
+except Exception:
+    pass
+
 try:
     from streamlit_drawable_canvas import st_canvas
     HAS_CANVAS = True
