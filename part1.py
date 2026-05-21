@@ -452,7 +452,6 @@ def predict_with_model(model: nn.Module, gradcam: GradCAMHelper, image: Image.Im
 
 
 def predict_with_rule_demo(image: Image.Image) -> Dict:
-    # 规则演示模式：不是医学模型，只用于没有 pt 文件时跑通演示流程
     gray = np.array(image.convert("L"), dtype=np.float32)
     gray_norm = (gray - gray.min()) / (gray.max() - gray.min() + 1e-8)
 
@@ -591,24 +590,13 @@ def render_case_info(meta: Dict):
 
 
 def get_user_mask(image: Image.Image) -> np.ndarray:
+    """获取用户圈选区域。优先画布拖框，不可用时回退滑块。"""
     w, h = image.size
 
     st.markdown("### 用户圈选区域")
-    st.caption("当前使用滑块模式圈选。")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        x = st.slider("左上角 X", 0, max(0, w - 1), int(w * 0.25))
-        rect_w = st.slider("框宽度", 1, max(1, w), int(w * 0.25))
-    with c2:
-        y = st.slider("左上角 Y", 0, max(0, h - 1), int(h * 0.25))
-        rect_h = st.slider("框高度", 1, max(1, h), int(h * 0.25))
-
-    return rectangle_mask((w, h), x, y, rect_w, rect_h)
-
-    st.markdown("### 用户圈选区域")
     if HAS_CANVAS:
-        st.caption("你可以直接在图上拖出一个矩形框。若组件未安装，会自动切换为滑块模式。")
+        st.caption("在图上直接拖拽绘制矩形框，框选你关注的区域。")
         canvas_result = st_canvas(
             fill_color="rgba(0, 255, 0, 0.12)",
             stroke_width=2,
@@ -629,7 +617,10 @@ def get_user_mask(image: Image.Image) -> np.ndarray:
             rect_h = int(obj.get("height", 1) * obj.get("scaleY", 1))
             return rectangle_mask((w, h), x, y, rect_w, rect_h)
 
-    st.caption("当前使用滑块模式圈选。你也可以安装 `streamlit-drawable-canvas` 获得直接拖框体验。")
+        st.caption("👆 请在图上拖框，或使用下方滑块替代。")
+    else:
+        st.caption("画布组件未安装，使用滑块模式。安装 `streamlit-drawable-canvas` 可启用直接拖框。")
+
     c1, c2 = st.columns(2)
     with c1:
         x = st.slider("左上角 X", 0, max(0, w - 1), int(w * 0.25))
