@@ -1,0 +1,31 @@
+{
+  "id": "case_001",
+  "title": "周围型肺结节 - 右肺上叶",
+  "class": "Lesion",
+  "difficulty": "easy",
+  "description": "右肺上叶周围型结节，边缘清晰，直径约15mm。结节呈类圆形，密度均匀，邻近胸膜无牵拉。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 261,
+  "medical_knowledge": {
+    "imaging_features": [
+      "类圆形结节",
+      "边缘清晰",
+      "密度均匀"
+    ],
+    "differential_diagnosis": [
+      "炎性假瘤",
+      "结核球"
+    ],
+    "lidc_characteristics": {
+      "subtlety": 3,
+      "spiculation": 2,
+      "texture": 3,
+      "malignancy_avg": 2.5
+    }
+  },
+  "teaching_points": [
+    "边缘清晰的类圆形结节需结合临床判断",
+    "Grad-CAM关注区域集中在结节实质部分"
+  ]
+}

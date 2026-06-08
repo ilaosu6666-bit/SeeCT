@@ -1,0 +1,23 @@
+{
+  "id": "case_005",
+  "title": "正常肺实质 - 清晰透亮",
+  "class": "Normal",
+  "difficulty": "easy",
+  "description": "双肺透亮度正常，肺纹理清晰，未见异常密度影。气管支气管通畅，纵隔居中。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 133,
+  "medical_knowledge": {
+    "imaging_features": [
+      "肺纹理清晰",
+      "透亮度正常",
+      "未见异常密度"
+    ],
+    "differential_diagnosis": [],
+    "lidc_characteristics": {}
+  },
+  "teaching_points": [
+    "正常肺CT的关键识别点：肺纹理走行自然、无异常密度影",
+    "AI对正常肺组织的Grad-CAM热力图应均匀分布"
+  ]
+}

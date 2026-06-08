@@ -1,0 +1,31 @@
+{
+  "id": "case_003",
+  "title": "磨玻璃密度结节 - 左肺上叶",
+  "class": "Lesion",
+  "difficulty": "hard",
+  "description": "左肺上叶磨玻璃密度影，边界模糊，直径约12mm。磨玻璃结节诊断难度大，需结合随访变化判断。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 140,
+  "medical_knowledge": {
+    "imaging_features": [
+      "磨玻璃密度",
+      "边界模糊",
+      "无实性成分"
+    ],
+    "differential_diagnosis": [
+      "非典型腺瘤样增生(AAH)",
+      "局灶性炎症"
+    ],
+    "lidc_characteristics": {
+      "subtlety": 5,
+      "spiculation": 1,
+      "texture": 1,
+      "malignancy_avg": 3.0
+    }
+  },
+  "teaching_points": [
+    "磨玻璃结节的AI诊断准确率通常低于实性结节",
+    "边界模糊导致Grad-CAM热力图分散"
+  ]
+}

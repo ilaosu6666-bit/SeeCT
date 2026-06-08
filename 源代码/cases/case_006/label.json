@@ -1,0 +1,23 @@
+{
+  "id": "case_006",
+  "title": "正常肺实质 - 纵隔窗",
+  "class": "Normal",
+  "difficulty": "easy",
+  "description": "肺实质未见结节或肿块。纵隔结构正常，大血管走行自然，未见淋巴结肿大。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 153,
+  "medical_knowledge": {
+    "imaging_features": [
+      "肺实质清晰",
+      "纵隔结构正常",
+      "无淋巴结肿大"
+    ],
+    "differential_diagnosis": [],
+    "lidc_characteristics": {}
+  },
+  "teaching_points": [
+    "初学者易将正常血管断面误认为结节",
+    "连续浏览相邻切片有助于区分血管和结节"
+  ]
+}

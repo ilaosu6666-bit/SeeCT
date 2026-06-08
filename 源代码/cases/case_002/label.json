@@ -1,0 +1,31 @@
+{
+  "id": "case_002",
+  "title": "肺结节伴毛刺征 - 右肺中叶",
+  "class": "Lesion",
+  "difficulty": "medium",
+  "description": "右肺中叶结节，直径约18mm，边缘可见短毛刺征，邻近胸膜轻度凹陷。毛刺征是恶性结节的重要影像学特征。",
+  "image": "image.png",
+  "answer_mask": "",
+  "slice_count": 133,
+  "medical_knowledge": {
+    "imaging_features": [
+      "毛刺征",
+      "胸膜凹陷征",
+      "分叶状边缘"
+    ],
+    "differential_diagnosis": [
+      "周围型肺腺癌",
+      "炎性假瘤"
+    ],
+    "lidc_characteristics": {
+      "subtlety": 4,
+      "spiculation": 4,
+      "texture": 5,
+      "malignancy_avg": 4.2
+    }
+  },
+  "teaching_points": [
+    "毛刺征是恶性结节的典型特征之一",
+    "Grad-CAM高亮区域与结节毛刺边缘高度吻合"
+  ]
+}

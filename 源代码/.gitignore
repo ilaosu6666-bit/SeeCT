@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+.claude/
+cases/Lesion/
+cases/Normal/
+需求.docx
+docx_content.txt
+quick_train.py
+
+seeCT/
