@@ -8,9 +8,9 @@ echo   SeeCT - Launcher
 echo ========================================
 echo.
 
-:: --- Step 1: venv ---
+:: --- Create venv if missing ---
 if not exist ".venv\Scripts\python.exe" (
-    echo [1/4] Creating virtual environment...
+    echo [SETUP] Virtual environment not found. Creating...
     set "PYCMD="
     python --version >nul 2>&1 && set "PYCMD=python"
     if "!PYCMD!"=="" python3 --version >nul 2>&1 && set "PYCMD=python3"
@@ -21,52 +21,45 @@ if not exist ".venv\Scripts\python.exe" (
         pause
         exit /b 1
     )
-    echo     Using: !PYCMD!
     !PYCMD! -m venv .venv
     if !errorlevel! neq 0 (
-        echo [ERROR] Failed to create venv.
+        echo [ERROR] Failed to create virtual environment.
         pause
         exit /b 1
     )
     echo [OK] Virtual environment created.
 ) else (
-    echo [1/4] Virtual environment ready.
+    echo [OK] Using existing virtual environment.
 )
 
-:: --- Step 2: Activate ---
-echo [2/4] Activating environment...
+:: --- Activate venv ---
 call .venv\Scripts\activate.bat
 if %errorlevel% neq 0 (
-    echo [ERROR] Activation failed.
+    echo [ERROR] Failed to activate virtual environment.
     pause
     exit /b 1
 )
-echo [OK] Activated.
 
-:: --- Step 3: Dependencies ---
-echo [3/4] Checking dependencies...
-.venv\Scripts\python.exe -c "import streamlit, torch, cv2, numpy, PIL, matplotlib" >nul 2>&1
+:: --- Install dependencies if needed ---
+python -c "import streamlit, torch, cv2, numpy, PIL, matplotlib" >nul 2>&1
 if !errorlevel! neq 0 (
-    echo     Installing packages (this may take a few minutes)...
-    .venv\Scripts\python.exe -m pip install -r requirements.txt
+    echo [SETUP] Installing dependencies (may take a few minutes)...
+    pip install -r requirements.txt -q
     if !errorlevel! neq 0 (
         echo [WARN] Some packages may have failed. Trying to continue...
-    ) else (
-        echo [OK] Dependencies installed.
     )
+    echo [OK] Dependencies installed.
 ) else (
     echo [OK] All dependencies ready.
 )
 
-:: --- Step 4: Start ---
-echo.
-echo [4/4] Starting server...
+:: --- Start server ---
 echo.
 echo ========================================
-echo   Open http://localhost:8501
+echo   Starting at http://localhost:8501
 echo   Press Ctrl+C to stop.
 echo ========================================
 start "" http://localhost:8501
-.venv\Scripts\python.exe -m streamlit run app.py --server.port 8501
+streamlit run app.py --server.port 8501
 
 pause

@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 title SeeCT - Launcher
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo ========================================
 echo   SeeCT - Launcher
