@@ -473,10 +473,14 @@ def render_stage1():
                 if is_correct:
                     correct_count += 1
 
+                # 样本1、样本2 使用 cases/roi/ 中的专用标注图
+                roi_path = Path(f"cases/roi/{i+1}.png")
+                display_path = str(roi_path) if roi_path.exists() else img_path
+
                 st.markdown(f"### {'✅' if is_correct else '❌'} 样本 {i+1}")
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    disp_img = load_image_smart(img_path)
+                    disp_img = load_image_smart(display_path)
                     if disp_img:
                         st.image(disp_img, width=280)
                 with col_b:
