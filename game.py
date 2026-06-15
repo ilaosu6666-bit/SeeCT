@@ -404,12 +404,10 @@ def render_stage1():
                         lesion_samples.append(entry)
                     else:
                         normal_samples.append(entry)
-            # 各取最多3个，混合后打乱
+            # 各取最多3个，保持固定顺序（病灶在前，正常在后）
             samples = lesion_samples[:3] + normal_samples[:3]
-            random.shuffle(samples)
             if len(samples) < 2:
                 samples = lesion_samples + normal_samples
-                random.shuffle(samples)
             st.session_state["s1_label_samples"] = samples[:6]
             st.session_state["s1_label_answers"] = {}
             st.session_state["s1_label_revealed"] = False
