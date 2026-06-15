@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智影溯源 - AI肺结节教学平台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0E1117;--bg2:#1A1C23;--text:#E0E0E0;--accent:#00CED1;
+  --red:#FF6B6B;--green:#4ECDC4;--orange:#FFA500;--radius:8px;
+}
+body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+
+/* 侧边栏 */
+#sidebar{width:260px;background:var(--bg2);padding:16px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+#sidebar h1{font-size:20px;text-align:center;color:var(--accent)}
+#sidebar .stage{font-size:14px;color:#999}
+#sidebar progress{width:100%;height:8px;border-radius:4px}
+#sidebar progress::-webkit-progress-bar{background:#333;border-radius:4px}
+#sidebar progress::-webkit-progress-value{background:var(--accent);border-radius:4px}
+#sidebar .metric{padding:8px;background:#0E1117;border-radius:var(--radius)}
+#sidebar .metric .label{font-size:12px;color:#999}
+#sidebar .metric .val{font-size:18px;font-weight:bold;color:var(--accent)}
+#sidebar .ach{font-size:12px;padding:4px 8px;background:#0E1117;border-radius:4px;color:var(--green)}
+#sidebar .ach::before{content:'✓ '}
+#sidebar button{padding:10px;border:none;border-radius:var(--radius);cursor:pointer;font-size:14px}
+.btn-accent{background:var(--accent);color:#000;font-weight:bold;width:100%}
+.btn-reset{background:#333;color:var(--text);width:100%}
+#sidebar button:hover{opacity:0.8}
+
+/* 主内容 */
+#main{flex:1;padding:24px;overflow-y:auto;max-height:100vh}
+#main h2{font-size:24px;margin-bottom:4px}
+#main .subtitle{color:#999;margin-bottom:16px}
+.section{display:none}
+.section.active{display:block}
+
+/* 通用 */
+.row{display:flex;gap:16px;flex-wrap:wrap}
+.card{background:var(--bg2);padding:16px;border-radius:var(--radius)}
+.col2{flex:1;min-width:280px}
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #333}
+.tabs label{padding:8px 16px;cursor:pointer;color:#999;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tabs input[type=radio]{display:none}
+.tabs input:checked+label{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.metric-box{padding:12px;background:#0E1117;border-radius:var(--radius);text-align:center}
+.metric-box .num{font-size:24px;font-weight:bold;color:var(--accent)}
+.metric-box .lbl{font-size:12px;color:#999;margin-top:4px}
+.btn{padding:10px 20px;border:none;border-radius:var(--radius);cursor:pointer;font-size:14px}
+.btn.accent{background:var(--accent);color:#000;font-weight:bold}
+.btn.red{background:var(--red);color:#fff}
+.btn.outline{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+button:disabled{opacity:0.4;cursor:not-allowed}
+img{max-width:100%;border-radius:var(--radius)}
+progress{height:8px;border-radius:4px}
+progress::-webkit-progress-bar{background:#333;border-radius:4px}
+progress::-webkit-progress-value{background:var(--accent);border-radius:4px}
+.chk{width:20px;height:20px}
+
+/* 关卡3决策 */
+.decision{background:#1a1a2e;border-left:3px solid var(--accent);padding:12px 16px;margin:8px 0;border-radius:0 var(--radius) var(--radius) 0}
+
+/* 移动端 */
+@media(max-width:768px){
+  body{flex-direction:column}
+  #sidebar{width:100%;flex-direction:row;flex-wrap:wrap;gap:8px;padding:10px}
+  #sidebar h1{font-size:16px;width:100%}
+  #main{padding:12px}
+  .row{flex-direction:column}
+  .col2{min-width:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- 侧边栏 -->
+<div id="sidebar">
+  <h1>🧠 AI训练师</h1>
+  <div class="stage" id="side-stage">关卡1: 数据猎人</div>
+  <progress id="side-progress" value="0" max="100"></progress>
+  <div class="metric"><div class="label">总分</div><div class="val" id="side-score">0</div></div>
+  <div class="metric"><div class="label">模型准确率</div><div class="val" id="side-acc">未训练</div></div>
+  <div id="side-achieve"></div>
+  <div id="side-dev" style="font-size:12px">
+    <select id="dev-jump" style="width:100%;padding:4px;background:#333;color:var(--text);border:none;border-radius:4px">
+      <option value="0">🔧 开发者跳转</option>
+      <option value="1">关卡1: 数据猎人</option>
+      <option value="2">关卡2: 架构师</option>
+      <option value="3">关卡3: 训练大师</option>
+      <option value="4">关卡4: 诊断专家</option>
+      <option value="5">关卡5: 临床实战</option>
+    </select>
+  </div>
+  <button class="btn-reset" onclick="resetGame()">🔄 重新开始</button>
+</div>
+
+<!-- 主内容 -->
+<div id="main">
+  <section class="section active" id="s1"></section>
+  <section class="section" id="s2"></section>
+  <section class="section" id="s3"></section>
+  <section class="section" id="s4"></section>
+  <section class="section" id="s5"></section>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+let GS={stage:1,score:0,achievements:[],modelAccuracy:0,chosenArch:null,hyperparams:{},
+  // Stage1
+  s1tab1:false,s1tab2:false,s1tab3:false,
+  s1answers:[],s1revealed:false,
+  // Stage3
+  s3phase:'intro',s3decisions:{},s3watched:0,
+  // Stage4
+  s4idx:0,s4done:[],
+  // Stage5
+  s5queue:[],s5current:0,s5answers:{},s5finished:false
+};
+const stageNames={1:'数据猎人',2:'架构师',3:'训练大师',4:'诊断专家',5:'临床实战'};
+const archInfo={resnet18:{params:'11M',time:'~2分/轮(CPU)',mem:'~0.5GB',upgrade:3},'3dcnn':{params:'5M',time:'~8分/轮(CPU)',mem:'~2GB',upgrade:6}};
+
+// 从 URL 恢复状态（可选）
+try{ const s=localStorage.getItem('gameState'); if(s) GS=Object.assign(GS,JSON.parse(s)); }catch(e){}
+function saveState(){ try{ localStorage.setItem('gameState',JSON.stringify(GS)); }catch(e){} }
+
+// ==================== 渲染侧边栏 ====================
+function renderSidebar(){
+  const stage=GS.stage;
+  document.getElementById('side-stage').textContent=`关卡${stage}: ${stageNames[stage]}`;
+  document.getElementById('side-progress').value=(stage-1)*25;
+  document.getElementById('side-score').textContent=GS.score;
+  document.getElementById('side-acc').textContent=GS.modelAccuracy? (GS.modelAccuracy*100).toFixed(1)+'%' : '未训练';
+  const achDiv=document.getElementById('side-achieve');
+  if(GS.achievements.length){
+    achDiv.innerHTML=GS.achievements.map(a=>`<div class="ach">${a}</div>`).join('');
+  }else{
+    achDiv.innerHTML='';
+  }
+  saveState();
+}
+
+// ==================== 页面切换 ====================
+function showStage(n){
+  GS.stage=n; saveState();
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('s'+n).classList.add('active');
+  renderSidebar();
+  if(n===1) renderStage1();
+  else if(n===2) renderStage2();
+  else if(n===3){ GS.s3phase='intro'; renderStage3(); }
+  else if(n===4){ GS.s4idx=0; GS.s4done=[]; renderStage4(); }
+  else if(n===5){ GS.s5queue=[]; GS.s5current=0; GS.s5answers={}; GS.s5finished=false; renderStage5(); }
+}
+function resetGame(){
+  localStorage.removeItem('gameState');
+  location.reload();
+}
+document.getElementById('dev-jump').addEventListener('change',function(){
+  const v=parseInt(this.value);
+  if(v>0){ this.value=0; showStage(v); }
+});
+
+// ==================== 数据加载 ====================
+let caseList=[], trainingHistory=null;
+async function loadData(){
+  try{
+    const r=await fetch('loss_fig/training_history.json');
+    trainingHistory=await r.json();
+  }catch(e){ trainingHistory=_genDemoHistory(); }
+  // 病例列表
+  for(let i=1;i<=6;i++){
+    const dir=`cases/case_${String(i).padStart(3,'0')}`;
+    try{
+      const r=await fetch(`${dir}/label.json`);
+      const meta=await r.json();
+      caseList.push({id:dir,image:`${dir}/image.png`,meta,thumbDir:`${dir}/slices/thumb/`,sliceCount:meta.slice_count||0});
+    }catch(e){}
+  }
+}
+function _genDemoHistory(){
+  const epochs=[],tl=[],vl=[],ta=[],va=[];
+  for(let e=1;e<=50;e++){
+    epochs.push(e);
+    tl.push(0.85*Math.exp(-0.08*e)+0.05*Math.random()+0.1);
+    vl.push(0.82*Math.exp(-0.06*e)+0.08*Math.random()+0.15);
+    ta.push(Math.min(0.95,0.3+0.6*(1-Math.exp(-0.06*e))+0.03*Math.random()));
+    va.push(Math.min(0.85,0.25+0.5*(1-Math.exp(-0.04*e))+0.05*Math.random()));
+  }
+  return {epochs,train_loss:tl,val_loss:vl,train_acc:ta,val_acc:va};
+}
+
+// ==================== 关卡绘制工具 ====================
+function drawCurves(history,highlightEpoch,ctxW,ctxH){
+  const canvas=document.createElement('canvas'); canvas.width=ctxW; canvas.height=ctxH;
+  const ctx=canvas.getContext('2d'), W=ctxW/2, H=ctxH;
+  const end=Math.min(highlightEpoch||50, history.epochs.length);
+  const epochs=history.epochs.slice(0,end);
+  const pad=40, chartW=(W-pad*2), chartH=H-pad*2;
+  // Loss 图
+  ctx.strokeStyle='#666'; ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
+  drawLine(ctx,epochs,history.train_loss.slice(0,end),'#4ECDC4',pad,chartW,chartH,H);
+  drawLine(ctx,epochs,history.val_loss.slice(0,end),'#FF6B6B',pad,chartW,chartH,H);
+  if(highlightEpoch) drawVLine(ctx,highlightEpoch,'#FFA500',pad,chartW,chartH,H,end);
+  ctx.fillStyle='#E0E0E0'; ctx.font='12px sans-serif';
+  ctx.fillText('Loss 曲线',pad+10,pad+16);
+  // Acc 图
+  const apad=W+pad;
+  ctx.strokeStyle='#666'; ctx.beginPath(); ctx.moveTo(apad,pad); ctx.lineTo(apad,H-pad); ctx.lineTo(W+W-pad,H-pad); ctx.stroke();
+  drawLine(ctx,epochs,history.train_acc.slice(0,end).map(a=>a*100),'#4ECDC4',apad,chartW,chartH,H,0,100);
+  drawLine(ctx,epochs,history.val_acc.slice(0,end).map(a=>a*100),'#FF6B6B',apad,chartW,chartH,H,0,100);
+  if(highlightEpoch) drawVLine(ctx,highlightEpoch,'#FFA500',apad,chartW,chartH,H,end);
+  ctx.fillStyle='#E0E0E0';
+  ctx.fillText('Accuracy 曲线',apad+10,pad+16);
+  ctx.fillStyle='#999'; ctx.font='10px sans-serif';
+  ctx.fillText('蓝=训练 红=验证',pad+10,pad+30);
+  ctx.fillText('蓝=训练 红=验证',apad+10,pad+30);
+  return canvas;
+}
+function drawLine(ctx,epochs,values,color,x0,cw,ch,chH,yMin,yMax){
+  if(!yMin){ yMin=Math.min(...values); yMax=Math.max(...values); }
+  const range=yMax-yMin||1;
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+  epochs.forEach((e,i)=>{
+    const x=x0+(e/epochs[epochs.length-1])*cw;
+    const y=chH-ch/2-((values[i]-yMin)/range)*ch;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+function drawVLine(ctx,epoch,color,x0,cw,ch,chH,maxEpoch){
+  const x=x0+(epoch/maxEpoch)*cw;
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.setLineDash([4,4]); ctx.beginPath();
+  ctx.moveTo(x,chH-ch/2); ctx.lineTo(x,chH-ch/2-ch); ctx.stroke(); ctx.setLineDash([]);
+}
+
+// ==================== 关卡1: 数据猎人 ====================
+function renderStage1(){
+  const s=document.getElementById('s1');
+  s.innerHTML=`
+    <h2>🔍 关卡1: 数据猎人</h2><p class="subtitle">目标：理解CT影像数据，收集并准备训练样本</p>
+    <div class="tabs" id="s1-tabs">
+      <input type="radio" name="s1tab" id="s1t1" onchange="switchTab1(0)" ${GS.s1tab1?'':'checked'}>
+      <label for="s1t1">📖 认识CT数据</label>
+      <input type="radio" name="s1tab" id="s1t2" onchange="switchTab1(1)">
+      <label for="s1t2">🎚️ 肺窗调节实验</label>
+      <input type="radio" name="s1tab" id="s1t3" onchange="switchTab1(2)">
+      <label for="s1t3">🏷️ 标注训练数据</label>
+    </div>
+    <div id="s1tc0" class="tab-content active">${tab1Content()}</div>
+    <div id="s1tc1" class="tab-content">${tab2Content()}</div>
+    <div id="s1tc2" class="tab-content">${tab3Content()}</div>
+    <hr>
+    <div id="s1-progress" style="margin-top:16px">
+      ${renderS1Progress()}
+    </div>
+  `;
+  if(GS.s1tab2) initLungCanvas();
+}
+
+function switchTab1(n){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('s1tc'+n).classList.add('active');
+  if(!GS.s1tab1 && n===0) GS.s1tab1=true;
+  if(n===1) setTimeout(initLungCanvas,100);
+  renderSidebar(); refreshS1Progress();
+}
+
+function tab1Content(){
+  let html=`
+    <div class="card" style="margin-bottom:16px">
+      <h3>CT是什么？</h3>
+      <p><b>CT (Computed Tomography)</b> 是X射线从不同角度扫描人体后重建的断面图像。可以理解为"将人体切成很多薄片，然后一张张拍照"。</p>
+    </div>
+    <div class="row">
+      <div class="col2 card"><h4>CT值 (HU)</h4>
+        <table style="width:100%;margin-top:8px">
+          <tr><td>空气</td><td>≈ -1000</td></tr><tr><td>肺组织</td><td>≈ -700 ~ -800</td></tr>
+          <tr><td>脂肪</td><td>≈ -100 ~ -50</td></tr><tr><td>水</td><td>0</td></tr>
+          <tr><td>软组织</td><td>+20 ~ +50</td></tr><tr><td>骨骼</td><td>+400 ~ +1000</td></tr>
+        </table>
+      </div>
+      <div class="col2 card"><p>💡 <b>关键洞察</b><br>肺部CT中，肺组织HU值很低(≈-800)而结节是软组织(≈+20~+50)。这种密度差异正是AI识别结节的基础!</p></div>
+    </div>
+  `;
+  // 切片浏览器
+  if(caseList.length>0){
+    const c=caseList[0];
+    html+=`<div class="card" style="margin-top:16px"><h4>3D体积切片浏览</h4><p>CT数据是3D体积(一堆切片堆叠)。拖动滑块浏览不同层面:</p>
+      <div style="text-align:center"><input type="range" id="s1-slice-range" min="0" max="${c.sliceCount-1}" value="${Math.floor(c.sliceCount/2)}" oninput="updateSlice(this.value)" style="width:100%">
+      <img id="s1-slice-img" src="" style="max-width:350px;margin-top:8px" alt="切片">
+      <div id="s1-slice-caption" style="font-size:13px;color:#999"></div></div></div>`;
+  }
+  return html;
+}
+
+function updateSlice(idx){ window._sliceIdx=idx; refreshSlice(); }
+function refreshSlice(){
+  if(caseList.length===0) return;
+  const c=caseList[0], idx=window._sliceIdx||0;
+  document.getElementById('s1-slice-img').src=`${c.thumbDir}1-${String(idx+1).padStart(3,'0')}.png`;
+  document.getElementById('s1-slice-caption').textContent=`切片 #${idx+1}/${c.sliceCount}`;
+  GS.s1tab1=true; renderSidebar(); refreshS1Progress();
+}
+
+function tab2Content(){
+  return `<div class="row">
+    <div class="col2 card"><h4>肺窗调节实验</h4><p>原始CT的HU范围很宽(-1000~+1000)，人眼只能分辨有限灰阶。<b>窗技术</b>通过设置窗宽(WW)和窗位(WC)来突出观察目标。</p>
+      <div style="display:flex;gap:8px;margin:8px 0"><button class="btn outline" onclick="setPreset(-600,1500)">肺窗</button><button class="btn outline" onclick="setPreset(50,350)">纵隔窗</button><button class="btn outline" onclick="setPreset(400,1800)">骨窗</button></div>
+      <div style="display:flex;gap:8px"><div style="flex:1"><label>窗位 WC: <span id="s1-wc-val">-600</span></label><input type="range" id="s1-wc" min="-1000" max="500" value="-600" oninput="updateLungWin()"></div>
+      <div style="flex:1"><label>窗宽 WW: <span id="s1-ww-val">1500</span></label><input type="range" id="s1-ww" min="100" max="3000" value="1500" oninput="updateLungWin()"></div></div></div>
+    <div class="col2"><canvas id="s1-lung-canvas" width="256" height="256"></canvas></div>
+  </div>
+  <div id="s1-lung-hint" style="margin-top:8px;padding:8px;background:var(--bg2);border-radius:var(--radius);font-size:14px;color:#aaa">💡 尝试 WC=-600, WW=1500（临床标准肺窗）</div>`;
+}
+
+function setPreset(wc,ww){
+  document.getElementById('s1-wc').value=wc; document.getElementById('s1-ww').value=ww;
+  updateLungWin();
+}
+function updateLungWin(){
+  const wc=parseInt(document.getElementById('s1-wc').value);
+  const ww=parseInt(document.getElementById('s1-ww').value);
+  document.getElementById('s1-wc-val').textContent=wc;
+  document.getElementById('s1-ww-val').textContent=ww;
+  GS.s1tab2=true; renderSidebar(); refreshS1Progress();
+  // Canvas 肺部窗处理
+  const canvas=document.getElementById('s1-lung-canvas');
+  if(!canvas||!canvas._imgData) return;
+  const ctx=canvas.getContext('2d');
+  const imgData=ctx.createImageData(256,256);
+  const data=canvas._imgData, out=imgData.data;
+  const low=wc-ww/2, high=wc+ww/2, range=high-low;
+  for(let i=0;i<data.length;i+=4){
+    const hu=(data[i]/255)*2000-1000;
+    const pixel=Math.round(((hu-low)/range)*255);
+    const v=Math.max(0,Math.min(255,pixel));
+    out[i]=out[i+1]=out[i+2]=v; out[i+3]=255;
+  }
+  ctx.putImageData(imgData,0,0);
+  // 提示
+  const hint=document.getElementById('s1-lung-hint');
+  if(Math.abs(wc+600)<=50 && Math.abs(ww-1500)<=100){
+    hint.innerHTML='✅ 肺窗大师! WC≈-600, WW≈1500 是观察肺实质的最佳设置(+15分)';
+    hint.style.color=GS.score>0?'':'var(--green)';
+  }else{ hint.innerHTML='💡 尝试 WC=-600, WW=1500（临床标准肺窗）'; hint.style.color='#aaa'; }
+}
+function initLungCanvas(){
+  const canvas=document.getElementById('s1-lung-canvas');
+  if(!canvas) return;
+  // 用病例图作为demo
+  const img=new Image();
+  img.onload=function(){
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,256,256);
+    canvas._imgData=ctx.getImageData(0,0,256,256).data;
+    updateLungWin();
+  };
+  if(caseList.length>0) img.src=caseList[0].image;
+  else{ img.src=''; setTimeout(initLungCanvas,500); }
+}
+
+// 标注训练数据（Tab 3）
+function tab3Content(){
+  if(caseList.length===0) return '<div class="card">病例库为空。请运行 build_case_library.py。</div>';
+  let html='<div class="card"><h4>标记训练数据</h4><p>扮演数据标注员，判断以下CT切片中是否含有肺结节。</p></div>';
+  const samples=caseList.slice(0,4).concat(caseList.slice(4,6)); // 病灶+正常，固定顺序
+  window._s1samples=samples;
+  html+=samples.map((c,i)=>`
+    <div class="card" style="margin:8px 0">
+      <b>样本 ${i+1}: ${c.meta.title||c.id}</b>
+      <div class="row" style="margin-top:8px">
+        <div class="col2"><img src="${c.image}" style="max-width:250px"></div>
+        <div class="col2">
+          ${!GS.s1revealed ? `
+            <div style="margin:8px 0"><label><input type="radio" name="s1label${i}" value="Lesion"> 有结节 (Lesion)</label></div>
+            <div style="margin:8px 0"><label><input type="radio" name="s1label${i}" value="Normal"> 无结节 (Normal)</label></div>
+            <button class="btn accent" onclick="submitLabel(${i})">确认 ${i+1}</button>
+          ` : renderLabelResult(i,samples[i])}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  if(GS.s1revealed) html+=renderLabelSummary(samples);
+  return html;
+}
+
+function submitLabel(i){
+  const radios=document.getElementsByName('s1label'+i);
+  let val=null; radios.forEach(r=>{ if(r.checked) val=r.value; });
+  if(!val) return;
+  GS.s1answers[i]=val;
+  if(GS.s1answers.filter(a=>a!==undefined).length>=6) GS.s1revealed=true;
+  GS.s1tab3=true; renderSidebar(); renderStage1(); refreshS1Progress();
+}
+
+function renderLabelResult(i,sample){
+  const user=GS.s1answers[i]||'未作答', correct=sample.meta.class||'Lesion', ok=user===correct;
+  const mk=sample.meta.medical_knowledge||{};
+  let html=`<b>你的判断:</b> ${user}<br><b>真实标签:</b> ${correct}<br>${ok?'✅ 正确':'❌ 有偏差'}`;
+  if(!ok) html+='<br><small>提示: 正常血管断面和钙化点易与结节混淆</small>';
+  if(mk.imaging_features) html+=`<br><small><b>影像特征:</b> ${mk.imaging_features.join(', ')}</small>`;
+  return html;
+}
+
+function renderLabelSummary(samples){
+  const correct=samples.filter((s,i)=>GS.s1answers[i]===(s.meta.class||'Lesion')).length;
+  const acc=correct/samples.length;
+  return `<div class="card" style="margin-top:16px;border:1px solid var(--accent)">
+    <h4>📊 数据收集报告</h4>
+    <div class="row"><div class="metric-box col2"><div class="num">${samples.length}</div><div class="lbl">标注总数</div></div>
+    <div class="metric-box col2"><div class="num">${correct}</div><div class="lbl">正确数</div></div>
+    <div class="metric-box col2"><div class="num">${(acc*100).toFixed(0)}%</div><div class="lbl">准确率</div></div></div>
+    ${acc>=0.8?'<p style="color:var(--green);margin-top:8px">🏆 成就解锁: 火眼金睛</p>':''}
+    <p style="margin-top:8px;color:#999">💡 训练AI的第一步就是准备<b>标注数据</b>。AI学到的所有知识都来自于标注样本。标注质量差→AI学到错误判断；标注数据少→AI泛化能力弱。</p>
+  </div>`;
+}
+
+function renderS1Progress(){
+  const done=[GS.s1tab1,GS.s1tab2,GS.s1revealed].filter(Boolean).length;
+  const names=['认识CT数据','肺窗调节实验','标注训练数据'];
+  let html='<div class="card"><h4>📋 关卡进度</h4><div class="row" style="gap:8px">';
+  names.forEach((n,i)=>{ html+=`<div class="metric-box col2"><div class="num">${done>i?'✅':'⬜'}</div><div class="lbl">${n}</div></div>`; });
+  html+=`</div><progress value="${done*33}" max="100" style="width:100%;margin-top:8px"></progress>`;
+  if(done<3) html+='<p style="color:#999;margin-top:8px">👆 请依次浏览上方三个标签页，全部完成后解锁下一关</p>';
+  else html+='<p style="color:var(--green)">🎉 所有模块完成！<button class="btn accent" style="margin-left:8px" onclick="showStage(2)">进入下一关 →</button></p>';
+  html+='</div>';
+  return html;
+}
+function refreshS1Progress(){ document.getElementById('s1-progress').innerHTML=renderS1Progress(); }
+
+// ==================== 关卡2: 架构师 ====================
+function renderStage2(){
+  if(!GS.chosenArch) GS.chosenArch='resnet18';
+  const s=document.getElementById('s2');
+  s.innerHTML=`
+    <h2>🏗️ 关卡2: 架构师</h2><p class="subtitle">目标：选择神经网络架构并设置训练超参数</p>
+    <div class="row">
+      <div class="col2 card"><h4>选择模型架构</h4>
+        <div style="margin:8px 0"><label><input type="radio" name="arch" value="resnet18" ${GS.chosenArch==='resnet18'?'checked':''} onchange="setArch(this.value)"> ⭐ 2D ResNet18 (推荐)</label></div>
+        <div style="margin:8px 0"><label><input type="radio" name="arch" value="3dcnn" ${GS.chosenArch==='3dcnn'?'checked':''} onchange="setArch(this.value)"> 🔥 3D CNN (进阶)</label></div>
+        <div class="card" style="background:#0E1117;margin-top:8px"><p>${archDesc(GS.chosenArch)}</p></div>
+      </div>
+      <div class="col2 card"><h4>超参数配置</h4>
+        <label>学习率: <span id="s2-lr-val">1e-4</span></label><input type="range" id="s2-lr" min="0" max="6" value="3" oninput="updateLR(this.value)"><br>
+        <label>批次大小: <span id="s2-batch-val">16</span></label><input type="range" id="s2-batch" min="0" max="4" value="2" oninput="updateBatch(this.value)"><br>
+        <label>训练轮数: <span id="s2-epochs-val">50</span></label><input type="range" id="s2-epochs" min="1" max="10" value="5" oninput="updateEpochs(this.value)"><br>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><h4>📊 参数统计</h4>
+      <div class="row"><div class="metric-box col2"><div class="num" id="s2-params">${archInfo[GS.chosenArch].params}</div><div class="lbl">总参数量</div></div>
+      <div class="metric-box col2"><div class="num" id="s2-time">${archInfo[GS.chosenArch].time}</div><div class="lbl">预计训练时间</div></div>
+      <div class="metric-box col2"><div class="num" id="s2-mem">${archInfo[GS.chosenArch].mem}</div><div class="lbl">显存需求</div></div></div>
+    </div>
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn accent" style="font-size:16px;padding:12px 32px" onclick="showStage(3);GS.score+=20;addAchievement('架构师');renderSidebar()">确认并进入训练 →</button>
+    </div>
+  `;
+}
+
+function setArch(v){ GS.chosenArch=v; renderStage2(); }
+function archDesc(a){ return a==='resnet18'? 'ResNet18是经典的2D图像分类网络，参数约11M，训练稳定快速。': '3D CNN直接处理CT体积块(64×64×64)，利用空间上下文信息，但训练更慢（参考mr-mukherjee03/CT-Scan-Nodule-Detection）。'; }
+function updateLR(v){
+  const vals=[1e-5,3e-5,1e-4,3e-4,1e-3,3e-3,1e-2];
+  GS.hyperparams.lr=vals[v]; document.getElementById('s2-lr-val').textContent=vals[v].toExponential(0);
+}
+function updateBatch(v){
+  const vals=[4,8,16,32,64];
+  GS.hyperparams.batchSize=vals[v]; document.getElementById('s2-batch-val').textContent=vals[v];
+}
+function updateEpochs(v){
+  const vals=[10,20,30,40,50,70,80,90,100];
+  GS.hyperparams.epochs=vals[v];document.getElementById('s2-epochs-val').textContent=vals[v];
+}
+function addAchievement(name){ if(!GS.achievements.includes(name)){ GS.achievements.push(name); GS.score+=10; } }
+
+// ==================== 关卡3: 训练大师 ====================
+function renderStage3(){
+  const hist=trainingHistory||_genDemoHistory();
+  const s=document.getElementById('s3');
+  const phase=GS.s3phase;
+
+  function decisionUI(ep,title,desc,annot,ctxText){
+    return `
+      <div class="decision"><b>⚠️ ${title}</b><p>${desc}</p></div>
+      <div style="text-align:center"><canvas id="s3-curve-${ep}" width="700" height="220"></canvas></div>
+      <p style="font-size:14px;color:#aaa;margin-top:4px">📖 ${ctxText}</p>
+      <div style="text-align:center;margin:8px 0"><img id="s3-gradcam-${ep}" src="data/gradcam/epoch_${String(ep).padStart(3,'0')}_sim.png" style="max-width:280px" onerror="this.src='data/gradcam/epoch_001_lesion_cam.png'"></div>
+    `;
+  }
+
+  if(phase==='intro'){
+    s.innerHTML=`
+      <h2>🎯 关卡3: 训练大师 ⭐</h2><p class="subtitle">目标：观察AI学习过程，在关键时刻做出正确决策</p>
+      <div class="card"><p>AI开始第一轮训练。观察损失和准确率的变化趋势...</p></div>
+      ${decisionUI(4,'训练启动','Loss快速下降说明AI从数据中学到了基本规律。','','训练刚开始，Loss快速下降说明AI正在从数据中学习基本规律。就像婴儿开始认识世界，进步最快的就是这个阶段。')}
+      <div class="row" style="margin-top:8px"><div class="col2"><img src="data/gradcam/epoch_001_sim.png" style="max-width:280px"><br><small>第1轮: AI注意力随机分散</small></div>
+      <div class="col2"><img src="data/gradcam/epoch_004_sim.png" style="max-width:280px"><br><small>第4轮: AI开始关注肺部区域</small></div></div>
+      <button class="btn accent" style="margin-top:16px" onclick="nextPhase()">继续观察 →</button>
+    `;
+    setTimeout(()=>drawCurvePhase(4),100);
+  }else if(phase==='decision1'){
+    s.innerHTML=`
+      <h2>🎯 关卡3: 训练大师</h2>
+      ${decisionUI(5,'决策点1: 损失下降变慢了','训练进行到第5轮，损失下降速度明显放缓。验证集准确率增长也开始平缓。','','Loss下降变缓是正常的——AI已经学会了大方向，现在进入精细化调整。就像学骑车，一开始进步最大，后面每次只进步一点点。')}
+      <div class="card" style="margin-top:8px"><h4>作为AI研究员，你该如何应对？</h4>
+        ${['保持当前学习率继续训练（耐心等待收敛）','大幅降低学习率（0.001→0.00001）','提高学习率（加速训练）'].map((o,i)=>`<div style="margin:4px 0"><label><input type="radio" name="d1" value="${i}" onchange="GS.s3decisions.d1=${i}"> ${o}</label></div>`).join('')}
+        <button class="btn accent" onclick="submitDecision('d1',0)" ${GS.s3decisions.d1===undefined?'':'disabled'}>确认决策</button>
+        ${GS.s3decisions.d1!==undefined?`<p style="margin-top:8px;color:${GS.s3decisions.d1===0?'var(--green)':'var(--red)'}">${GS.s3decisions.d1===0?'✅ 正确！损失下降放缓是正常的收敛行为。':'❌ 不太合适。训练初期损失下降放缓是正常的。'}</p>`:''}
+      </div>
+      ${GS.s3decisions.d1!==undefined?'<button class="btn accent" style="margin-top:8px" onclick="nextPhase()">继续 →</button>':''}
+    `;
+    setTimeout(()=>drawCurvePhase(5),100);
+  }else if(phase==='decision2'){
+    s.innerHTML=`
+      <h2>🎯 关卡3: 训练大师</h2>
+      ${decisionUI(15,'决策点2: 验证准确率停滞','训练到第15轮，验证准确率连续3轮没有提升，似乎遇到了瓶颈。','','验证准确率出现平台期。AI在当前学习策略下已接近极限，需要降低学习率来更精细地调整参数，从而突破瓶颈。')}
+      <div class="card"><h4>你的策略是什么？</h4>
+        ${['继续训练，模型还在学习（耐心等待）','降低学习率（如1e-4→3e-5）并继续训练','立即停止训练（早停）'].map((o,i)=>`<div style="margin:4px 0"><label><input type="radio" name="d2" value="${i}" onchange="GS.s3decisions.d2=${i}"> ${o}</label></div>`).join('')}
+        <button class="btn accent" onclick="submitDecision('d2',1)" ${GS.s3decisions.d2===undefined?'':'disabled'}>确认决策</button>
+        ${GS.s3decisions.d2!==undefined?`<p style="margin-top:8px;color:${GS.s3decisions.d2===1?'var(--green)':'var(--red)'}">${GS.s3decisions.d2===1?'✅ 正确！降低学习率让模型进行更精细的调整。':'❌ 不太合适。平台期需要调整策略。'}</p>`:''}
+      </div>
+      ${GS.s3decisions.d2!==undefined?'<button class="btn accent" style="margin-top:8px" onclick="nextPhase()">继续 →</button>':''}
+    `;
+    setTimeout(()=>drawCurvePhase(15),100);
+  }else if(phase==='decision3'){
+    s.innerHTML=`
+      <h2>🎯 关卡3: 训练大师</h2>
+      ${decisionUI(25,'决策点3: 过拟合警报','第25轮：训练准确率90%，验证准确率仅78%——差距拉大，出现过拟合！','','⚠️ 训练和验证出现明显分叉！AI开始背答案——它记住了训练数据的特征，而不是学会通用判断。这就是过拟合。')}
+      <div class="row" style="margin:8px 0"><div class="metric-box col2"><div class="num" style="color:var(--green)">90%</div><div class="lbl">训练准确率</div></div>
+      <div class="metric-box col2"><div class="num" style="color:var(--red)">78%</div><div class="lbl">验证准确率 (-12%)</div></div></div>
+      <div class="card"><h4>过拟合了！怎么办？</h4>
+        ${['应该增加正则化（Dropout/数据增强）','继续训练更多轮','增加更多网络层数'].map((o,i)=>`<div style="margin:4px 0"><label><input type="radio" name="d3" value="${i}" onchange="GS.s3decisions.d3=${i}"> ${o}</label></div>`).join('')}
+        <button class="btn accent" onclick="submitDecision('d3',0)" ${GS.s3decisions.d3===undefined?'':'disabled'}>确认决策</button>
+        ${GS.s3decisions.d3!==undefined?`<p style="margin-top:8px;color:${GS.s3decisions.d3===0?'var(--green)':'var(--red)'}">${GS.s3decisions.d3===0?'✅ 正确！正则化是应对过拟合的首选策略。':'❌ 错误！这只会加剧过拟合。'}</p>`:''}
+      </div>
+      ${GS.s3decisions.d3!==undefined?'<button class="btn accent" style="margin-top:8px" onclick="finishTraining()">完成训练 →</button>':''}
+    `;
+    setTimeout(()=>drawCurvePhase(25),100);
+  }
+}
+
+function nextPhase(){
+  const phases=['intro','decision1','decision2','decision3'];
+  const i=phases.indexOf(GS.s3phase);
+  if(i<phases.length-1) GS.s3phase=phases[i+1];
+  renderStage3();
+}
+
+function submitDecision(key,correctVal){
+  const v=GS.s3decisions[key];
+  if(v===undefined) return;
+  if(v===correctVal) GS.score+=20;
+  renderStage3();
+}
+
+function finishTraining(){
+  const correctD=Object.values(GS.s3decisions).filter(v=>v===0||v===1||v===0).length;
+  GS.modelAccuracy=0.82+correctD*0.03; if(GS.modelAccuracy>0.92) GS.modelAccuracy=0.92;
+  GS.score+=correctD*5;
+  GS.s3phase='final';
+  const s=document.getElementById('s3');
+  const hist=trainingHistory||_genDemoHistory();
+  s.innerHTML=`
+    <h2>🎉 训练完成！你的AI毕业了！</h2>
+    <div style="text-align:center"><canvas id="s3-curve-final" width="700" height="220"></canvas></div>
+    <p style="font-size:14px;color:var(--accent);text-align:center">训练完成！最终验证准确率 ${(GS.modelAccuracy*100).toFixed(1)}%。AI已经学会了肺结节诊断。</p>
+    <div class="card" style="margin-top:16px"><h3>🔥 AI的注意力演变（Grad-CAM）</h3>
+      <p>拖动滑块观察AI注意力从'到处乱看'到'精准找到病灶'：</p>
+      <input type="range" id="s3-gc-slider" min="1" max="50" value="10" oninput="updateGradcamSlider(this.value)" style="width:100%">
+      <div style="text-align:center;margin-top:8px"><img id="s3-gc-img" src="data/gradcam/epoch_010_sim.png" style="max-width:320px"></div>
+      <small>💡 红色区域是AI当前最关注的区域。拖动滑块观察从第1轮到第50轮，AI注意力如何从弥散到精准。</small>
+    </div>
+    <div style="text-align:center;margin-top:16px"><button class="btn accent" onclick="showStage(4)">进入诊断评估 →</button></div>
+  `;
+  drawCurvePhase(50,'s3-curve-final');
+  addAchievement('洞察本质');
+  GS.score+=15; renderSidebar(); saveState();
+}
+
+function drawCurvePhase(ep,canvasId){
+  const id=canvasId||`s3-curve-${ep}`;
+  const hist=trainingHistory||_genDemoHistory();
+  setTimeout(()=>{
+    const canvas=document.getElementById(id);
+    if(!canvas) return;
+    const ctx=canvas.getContext('2d');
+    const c=drawCurves(hist,ep,700,220);
+    ctx.drawImage(c,0,0);
+  },50);
+}
+function updateGradcamSlider(v){
+  const ep=String(parseInt(v)).padStart(3,'0');
+  document.getElementById('s3-gc-img').src=`data/gradcam/epoch_${ep}_sim.png`;
+}
+
+// ==================== 关卡4: 诊断专家 ====================
+function renderStage4(){
+  if(caseList.length===0){ document.getElementById('s4').innerHTML='<div class="card">病例库为空</div>'; return; }
+  const total=4, done=GS.s4done.filter(Boolean).length;
+  if(done>=total){ renderStage4Complete(); return; }
+  const idx=GS.s4idx%caseList.length;
+  const c=caseList[idx];
+  const meta=c.meta||{};
+  const s=document.getElementById('s4');
+  s.innerHTML=`
+    <h2>🩺 关卡4: 诊断专家</h2><p class="subtitle">目标：用你训练的AI辅助诊断真实CT病例</p>
+    <progress value="${done*25}" max="100" style="width:100%"></progress><p>已完成: ${done}/${total}</p>
+    <div class="row">
+      <div class="col2"><img src="${c.image}" style="max-width:100%"></div>
+      <div class="col2 card"><h4>病例信息</h4><p>难度: ${meta.difficulty||'unknown'}</p><p>${meta.description||''}</p>
+        <div style="margin:12px 0"><b>你的独立判断：</b><br>
+          <label><input type="radio" name="s4nodule" value="有结节"> 有结节</label>
+          <label style="margin-left:12px"><input type="radio" name="s4nodule" value="无结节"> 无结节</label>
+        </div>
+        <button class="btn accent" onclick="runAIAnalysis()">启动AI分析 🚀</button>
+      </div>
+    </div>
+    <div id="s4-result"></div>
+  `;
+}
+
+function runAIAnalysis(){
+  const c=caseList[GS.s4idx%caseList.length];
+  const meta=c.meta||{};
+  const userNodule=document.querySelector('input[name="s4nodule"]:checked');
+  const userLabel=userNodule?userNodule.value:'未作答';
+  const trueLabel=meta.class||'Lesion';
+  // 模拟AI预测（实际可加载 prediction.json）
+  const aiPred=trueLabel;
+  const camImg=`data/gradcam/epoch_030_sim.png`;
+  const isCorrect=userLabel===(trueLabel==='Lesion'?'有结节':'无结节');
+  const score=isCorrect?80:40;
+  GS.score+=score; GS.s4done.push(true);
+  document.getElementById('s4-result').innerHTML=`
+    <div class="card" style="margin-top:16px;border:1px solid var(--accent)"><h4>🤖 AI分析结果</h4>
+      <div class="row"><div class="metric-box col2"><div class="num">${aiPred}</div><div class="lbl">AI判断</div></div>
+      <div class="metric-box col2"><div class="num">${isCorrect?'✅':'❌'} ${score}分</div><div class="lbl">诊断评分</div></div></div>
+      <div style="text-align:center;margin-top:8px"><img src="${camImg}" style="max-width:280px"><br><small>AI热力图 (聚焦区域)</small></div>
+      <button class="btn accent" style="margin-top:12px" onclick="GS.s4idx++;renderStage4();renderSidebar()">下一个病例 →</button>
+    </div>
+  `;
+  renderSidebar(); saveState();
+}
+
+function renderStage4Complete(){
+  document.getElementById('s4').innerHTML=`
+    <h2>🎉 所有病例诊断完成！</h2>
+    <div class="row"><div class="metric-box col2"><div class="num">${GS.score}</div><div class="lbl">总分</div></div></div>
+    <p>你在独立诊断和AI辅助诊断中表现出色。AI不是万能的，关键是与人类专业判断互补配合。</p>
+    <button class="btn accent" onclick="showStage(5)">进入临床实战 →</button>
+  `;
+}
+
+// ==================== 关卡5: 临床实战 ====================
+function renderStage5(){
+  if(!GS.s5queue.length){
+    GS.s5queue=caseList.slice(0,6).map(c=>({image:c.image,meta:c.meta,aiLabel:c.meta.class||'Lesion',aiConf:0.75+Math.random()*0.2}));
+    // AI陷阱：选2个低置信度的设为错误
+    const traps=[0,1]; traps.forEach(i=>{ GS.s5queue[i].aiLabel=GS.s5queue[i].aiLabel==='Lesion'?'Normal':'Lesion'; GS.s5queue[i].aiTrap=true; });
+  }
+  if(GS.s5finished){ renderStage5Results(); return; }
+  const q=GS.s5queue, cur=GS.s5current;
+  if(cur>=q.length){ GS.s5finished=true; renderStage5(); return; }
+  const item=q[cur];
+  const s=document.getElementById('s5');
+  s.innerHTML=`
+    <h2>🏥 关卡5: 临床实战</h2><p class="subtitle">目标：模拟放射科医生，完成批量CT筛查</p>
+    <progress value="${(cur/q.length)*100}" max="100" style="width:100%"></progress><p>待筛查: ${q.length-cur}/${q.length} 张剩余</p>
+    <div class="row">
+      <div class="col2"><img src="${item.image}" style="max-width:100%"><p>CT #${cur+1}</p></div>
+      <div class="col2 card"><h4>AI辅助</h4><p>AI判断: ${item.aiLabel} (置信度: ${(item.aiConf*100).toFixed(0)}%)</p>
+        <img src="data/gradcam/epoch_030_sim.png" style="max-width:200px"><br><small>AI热力图</small>
+        <div style="margin-top:12px"><b>你的判断：</b><br>
+          <label><input type="radio" name="s5label" value="Lesion"> Lesion (病变)</label>
+          <label style="margin-left:8px"><input type="radio" name="s5label" value="Normal"> Normal (正常)</label>
+        </div>
+        <button class="btn accent" style="margin-top:8px" onclick="submitS5Answer()">确认并下一张 →</button>
+      </div>
+    </div>
+  `;
+}
+
+function submitS5Answer(){
+  const radio=document.querySelector('input[name="s5label"]:checked');
+  if(!radio) return;
+  GS.s5answers[GS.s5current]={user:radio.value,ai:GS.s5queue[GS.s5current].aiLabel,true:GS.s5queue[GS.s5current].meta.class||'Lesion',trap:GS.s5queue[GS.s5current].aiTrap||false};
+  GS.s5current++; renderStage5(); renderSidebar();
+}
+
+function renderStage5Results(){
+  const answers=GS.s5answers, total=Object.keys(answers).length;
+  const correct=Object.values(answers).filter(a=>a.user===a.true).length;
+  const trapsFound=Object.values(answers).filter(a=>a.trap&&a.user!==a.ai&&a.user===a.true).length;
+  const totalTraps=GS.s5queue.filter(q=>q.aiTrap).length;
+  const grade=correct/total>=0.8?'S':correct/total>=0.6?'A':'B';
+  GS.score+=Math.round((correct/total)*100);
+  document.getElementById('s5').innerHTML=`
+    <h2>📊 最终结算</h2>
+    <div class="row"><div class="metric-box col2"><div class="num">${(correct/total*100).toFixed(0)}%</div><div class="lbl">筛查准确率</div></div>
+    <div class="metric-box col2"><div class="num">${trapsFound}/${totalTraps}</div><div class="lbl">发现AI陷阱</div></div></div>
+    <div class="card" style="margin-top:16px;text-align:center"><h1 style="font-size:48px;color:var(--accent)">${grade}</h1><p>总评级</p></div>
+    <div class="card" style="margin-top:8px"><h4>🏆 本次训练总结</h4><p>总得分: <b>${GS.score}</b> | 模型准确率: <b>${(GS.modelAccuracy*100).toFixed(1)}%</b> | 解锁成就: <b>${GS.achievements.length}</b>个</p>
+      <p style="color:#999">你体验了一个完整的AI开发流程：数据准备→模型搭建→训练调参→诊断评估→临床实战。AI不是万能的，关键是与人类专业判断互补配合。</p>
+    </div>
+    <button class="btn accent" style="margin-top:16px" onclick="resetGame()">🔄 重新挑战</button>
+  `;
+  renderSidebar(); saveState();
+}
+
+// 初始加载
+loadData().then(()=>{
+  renderSidebar();
+  if(GS.stage===1) renderStage1();
+  else showStage(GS.stage);
+  if(caseList.length>0) setTimeout(refreshSlice,200);
+  setTimeout(initLungCanvas,500);
+});
+</script>
+</body>
+</html>
