@@ -2,7 +2,7 @@
 智影溯源 桌面客户端
 """
 
-import os, sys, socket, threading, time
+import os, sys, socket, threading, time, tempfile
 
 
 def find_port(start=8501):
@@ -19,6 +19,28 @@ def find_port(start=8501):
 
 
 def main():
+    # ----- 防止重复启动 -----
+    lock = os.path.join(tempfile.gettempdir(), "zhiyingsuyuan.lock")
+    if os.path.exists(lock):
+        try:
+            os.remove(lock)  # 清理残留锁
+        except Exception:
+            import tkinter.messagebox as mb
+            mb.showinfo("智影溯源", "程序已在运行中。")
+            return
+    with open(lock, "w") as f:
+        f.write("running")
+
+    try:
+        _real_main(lock)
+    finally:
+        try:
+            os.remove(lock)
+        except Exception:
+            pass
+
+
+def _real_main(lock):
     # ----- 确定工作目录 -----
     if getattr(sys, 'frozen', False):
         base_dir = sys._MEIPASS
