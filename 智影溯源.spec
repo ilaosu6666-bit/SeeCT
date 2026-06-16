@@ -20,16 +20,17 @@ a = Analysis(
     binaries=[],
     datas=added_datas,
     hiddenimports=[
-        'streamlit',
+        'streamlit', 'streamlit.web.cli',
+        'streamlit.runtime', 'streamlit.runtime.scriptrunner',
         'torch', 'torchvision',
         'numpy', 'PIL', 'cv2',
         'matplotlib', 'pydicom',
-        'webview',
+        'webview', 'pydeck', 'altair', 'tornado',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[],  # 不要随便 exclude
     noarchive=False,
     optimize=0,
 )
