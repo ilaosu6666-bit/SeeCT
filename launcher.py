@@ -1,17 +1,15 @@
 """
 智影溯源 桌面客户端
-
-打包: pyinstaller --onedir --windowed --name 智影溯源 智影溯源.spec
+打包: pyinstaller 智影溯源.spec
 """
 
-import os, sys, socket, threading, time, tempfile
+import os, sys, socket, time, tempfile, subprocess
 
 
 def find_port(start=8501):
     for p in range(start, 8599):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            s.settimeout(0.1)
             s.bind(("127.0.0.1", p))
             s.close()
             return p
@@ -21,109 +19,99 @@ def find_port(start=8501):
 
 
 def main():
-    # ---- 防重复启动 ----
-    lock = os.path.join(tempfile.gettempdir(), "zhiying.lock")
-    if os.path.exists(lock):
-        # 锁文件存在 → 可能已有实例在跑，尝试连接现有服务
-        port = _read_port(lock)
-        if port:
-            try:
-                import urllib.request
-                urllib.request.urlopen(f"http://127.0.0.1:{port}", timeout=0.5)
-                # 服务正常运行，只打开窗口
-                _open_window(f"http://127.0.0.1:{port}")
-                return
-            except Exception:
-                pass
-        # 锁残留，清理
-        try:
-            os.remove(lock)
-        except Exception:
-            pass
+    # ----- 防重复启动 -----
+    lock_path = os.path.join(tempfile.gettempdir(), "zhiyingsuyuan.lock")
+    if os.path.exists(lock_path):
+        import tkinter.messagebox as mb
+        mb.showinfo("智影溯源", "程序已在运行中。")
+        return
+    with open(lock_path, "w") as f:
+        f.write(str(os.getpid()))
 
-    # ---- 正常启动 ----
     try:
-        _start()
+        _run(lock_path)
     finally:
         try:
-            os.remove(lock)
+            os.remove(lock_path)
         except Exception:
             pass
 
 
-def _read_port(lock_path):
-    try:
-        with open(lock_path) as f:
-            return int(f.read().strip())
-    except Exception:
-        return None
-
-
-def _start():
-    base_dir = (sys._MEIPASS if getattr(sys, 'frozen', False)
-                else os.path.dirname(os.path.abspath(__file__)))
+def _run(lock_path):
+    # ----- 工作目录 -----
+    if getattr(sys, 'frozen', False):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(base_dir)
 
     port = find_port()
     url = f"http://127.0.0.1:{port}"
 
-    # 写锁（含端口号，供后续检测连接）
-    with open(os.path.join(tempfile.gettempdir(), "zhiying.lock"), "w") as f:
-        f.write(str(port))
+    # 后台子进程启动 Streamlit
+    env = os.environ.copy()
+    env["BROWSER"] = "echo"  # 阻止 Streamlit 打开浏览器
 
-    # 环境变量
-    os.environ["BROWSER"] = "echo"
-    os.environ["STREAMLIT_SERVER_PORT"] = str(port)
-    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
-    os.environ["STREAMLIT_SERVER_ENABLE_CORS"] = "false"
-    os.environ["STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION"] = "false"
-    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    os.environ["STREAMLIT_SERVER_ADDRESS"] = "127.0.0.1"
-    os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
-    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "streamlit", "run", "app.py",
+         "--server.port", str(port),
+         "--server.headless", "true",
+         "--server.address", "127.0.0.1",
+         "--server.enableCORS", "false",
+         "--server.enableXsrfProtection", "false",
+         "--browser.gatherUsageStats", "false",
+         "--server.runOnSave", "false",
+         "--server.fileWatcherType", "none",
+         "--server.maxUploadSize", "50"],
+        cwd=base_dir,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
-    # 后台线程跑 Streamlit
-    def _serve():
-        import streamlit.web.bootstrap
-        streamlit.web.bootstrap.run(
-            os.path.join(base_dir, "app.py"),
-            is_hello=False,
-            args=[],
-            flag_options={},
-        )
-
-    threading.Thread(target=_serve, daemon=True).start()
-
-    # 等就绪
+    # 等待服务就绪
     import urllib.request
-    for _ in range(40):
-        time.sleep(0.5)
+    for _ in range(30):
         try:
-            urllib.request.urlopen(url, timeout=0.3)
+            urllib.request.urlopen(url + "/healthz", timeout=0.5)
             break
         except Exception:
-            pass
+            try:
+                urllib.request.urlopen(url, timeout=0.5)
+                break
+            except Exception:
+                time.sleep(0.8)
+    else:
+        import tkinter.messagebox as mb
+        mb.showerror("启动失败", "服务未能启动，请先运行 install.bat 安装依赖。")
+        proc.terminate()
+        return
 
-    _open_window(url)
-
-
-def _open_window(url):
+    # 打开桌面窗口
     try:
         import webview
         webview.create_window(
-            "智影溯源 - AI肺结节教学平台",
-            url, width=1280, height=800,
-            min_size=(900, 600), text_select=True,
+            "智影溯源 — AI肺结节教学平台",
+            url,
+            width=1280,
+            height=800,
+            min_size=(900, 600),
+            text_select=True,
         )
         webview.start()
-    except ImportError:
+    except Exception:
         import webbrowser
         webbrowser.open(url)
         try:
-            while True:
-                time.sleep(1)
+            proc.wait()
         except KeyboardInterrupt:
             pass
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
 
 
 if __name__ == "__main__":
