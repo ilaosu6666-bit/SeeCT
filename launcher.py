@@ -1,21 +1,24 @@
 """
 智影溯源 桌面客户端
-打包: pyinstaller 智影溯源.spec
 """
 
 import os, sys, time, socket, subprocess, tempfile
 
+# 强制无缓冲，避免 PyInstaller windowed 模式下的管道问题
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
 
-def resource_path(relative_path):
-    if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
+def resource_path(p):
+    d = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(d, p)
 
 
 def find_port(start=8501):
     for p in range(start, 8600):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            s.settimeout(0.1)
             s.bind(("127.0.0.1", p))
             s.close()
             return p
@@ -24,76 +27,68 @@ def find_port(start=8501):
     return 8501
 
 
-def run_streamlit_child():
-    """子进程：只运行 Streamlit，不再启动新 exe"""
-    port = sys.argv[sys.argv.index("--run-streamlit") + 1]
-    os.chdir(sys._MEIPASS if getattr(sys, 'frozen', False)
-             else os.path.dirname(os.path.abspath(__file__)))
-
-    app_path = resource_path("app.py")
-    import streamlit.web.cli as stcli
-    sys.argv = [
-        "streamlit", "run", app_path,
-        "--server.port", port,
-        "--server.headless", "true",
-        "--server.enableCORS", "false",
-        "--server.enableXsrfProtection", "false",
-        "--browser.gatherUsageStats", "false",
-        "--server.fileWatcherType", "none",
-    ]
-    sys.exit(stcli.main())
-
-
 def main():
-    # 子进程入口
-    if "--run-streamlit" in sys.argv:
-        run_streamlit_child()
+    # ----- 子进程模式 -----
+    if "--child" in sys.argv:
+        port = sys.argv[sys.argv.index("--child") + 1]
+        os.chdir(resource_path("."))
+        os.environ["BROWSER"] = "echo"
+        import streamlit.web.cli as stcli
+        sys.argv = [
+            "streamlit", "run", resource_path("app.py"),
+            "--server.port", port,
+            "--server.headless", "true",
+            "--server.enableCORS", "false",
+            "--server.enableXsrfProtection", "false",
+            "--browser.gatherUsageStats", "false",
+            "--server.fileWatcherType", "none",
+            "--server.runOnSave", "false",
+            "--server.address", "127.0.0.1",
+        ]
+        try:
+            stcli.main()
+        except SystemExit:
+            pass
+        os._exit(0)
         return
 
-    # ----- 防重复 -----
+    # ----- 父进程模式 -----
     lock = os.path.join(tempfile.gettempdir(), "zhiyingsuyuan.lock")
     if os.path.exists(lock):
         import tkinter.messagebox as mb
         mb.showinfo("智影溯源", "程序已在运行中。")
         return
     with open(lock, "w") as f:
-        f.write(str(os.getpid()))
+        f.write("1")
 
-    try:
-        _main(lock)
-    finally:
-        try:
-            os.remove(lock)
-        except Exception:
-            pass
-
-
-def _main(lock):
     port = find_port()
     url = f"http://127.0.0.1:{port}"
 
-    # 子进程运行 Streamlit
-    proc = subprocess.Popen(
-        [sys.executable, "--run-streamlit", str(port)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # 启动子进程—同一个 exe，带 --child 标记
+    child = subprocess.Popen(
+        [sys.executable, "--child", str(port)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE, close_fds=True,
     )
 
-    # 等待就绪
+    # 等待 Streamlit 就绪
     import urllib.request
-    for _ in range(30):
+    ok = False
+    for _ in range(60):
         try:
             urllib.request.urlopen(url, timeout=0.5)
+            ok = True
             break
         except Exception:
-            time.sleep(0.8)
-    else:
+            time.sleep(0.5)
+    if not ok:
         import tkinter.messagebox as mb
-        mb.showerror("启动失败", "服务未能启动")
-        proc.terminate()
+        mb.showerror("启动失败", "Streamlit 服务未能启动")
+        child.terminate()
+        os.remove(lock)
         return
 
-    # 打开窗口
+    # 弹窗
     try:
         import webview
         webview.create_window(
@@ -106,15 +101,19 @@ def _main(lock):
         import webbrowser
         webbrowser.open(url)
         try:
-            proc.wait()
+            child.wait()
         except KeyboardInterrupt:
             pass
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
-        except Exception:
-            proc.kill()
+
+    child.terminate()
+    try:
+        child.wait(timeout=5)
+    except Exception:
+        child.kill()
+    try:
+        os.remove(lock)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
