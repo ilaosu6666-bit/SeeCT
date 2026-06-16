@@ -460,7 +460,11 @@ def test_model():
         print("❌ 没有找到训练好的模型，请先训练。")
         return
 
-    net.load_state_dict(torch.load(model_path, map_location=device))
+    ckpt = torch.load(model_path, map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        net.load_state_dict(ckpt["model_state_dict"])
+    else:
+        net.load_state_dict(ckpt)
     criterion = nn.CrossEntropyLoss()
 
     test_loss, test_acc = evaluate(net, test_loader, criterion, device, mode="Test")
@@ -482,7 +486,11 @@ def predict_single_image(image_path):
         print("❌ 图片路径不存在：", image_path)
         return
 
-    net.load_state_dict(torch.load(model_path, map_location=device))
+    ckpt = torch.load(model_path, map_location=device)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        net.load_state_dict(ckpt["model_state_dict"])
+    else:
+        net.load_state_dict(ckpt)
     net.eval()
 
     transform = val_test_transform
