@@ -1,5 +1,7 @@
 """
 智影溯源 桌面客户端
+
+打包: pyinstaller --onedir --windowed --name 智影溯源 智影溯源.spec
 """
 
 import os, sys, socket, threading, time, tempfile
@@ -19,20 +21,29 @@ def find_port(start=8501):
 
 
 def main():
-    # ----- 防止重复启动 -----
-    lock = os.path.join(tempfile.gettempdir(), "zhiyingsuyuan.lock")
+    # ---- 防重复启动 ----
+    lock = os.path.join(tempfile.gettempdir(), "zhiying.lock")
     if os.path.exists(lock):
+        # 锁文件存在 → 可能已有实例在跑，尝试连接现有服务
+        port = _read_port(lock)
+        if port:
+            try:
+                import urllib.request
+                urllib.request.urlopen(f"http://127.0.0.1:{port}", timeout=0.5)
+                # 服务正常运行，只打开窗口
+                _open_window(f"http://127.0.0.1:{port}")
+                return
+            except Exception:
+                pass
+        # 锁残留，清理
         try:
-            os.remove(lock)  # 清理残留锁
+            os.remove(lock)
         except Exception:
-            import tkinter.messagebox as mb
-            mb.showinfo("智影溯源", "程序已在运行中。")
-            return
-    with open(lock, "w") as f:
-        f.write("running")
+            pass
 
+    # ---- 正常启动 ----
     try:
-        _real_main(lock)
+        _start()
     finally:
         try:
             os.remove(lock)
@@ -40,18 +51,28 @@ def main():
             pass
 
 
-def _real_main(lock):
-    # ----- 确定工作目录 -----
-    if getattr(sys, 'frozen', False):
-        base_dir = sys._MEIPASS
-    else:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+def _read_port(lock_path):
+    try:
+        with open(lock_path) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
+def _start():
+    base_dir = (sys._MEIPASS if getattr(sys, 'frozen', False)
+                else os.path.dirname(os.path.abspath(__file__)))
     os.chdir(base_dir)
 
     port = find_port()
     url = f"http://127.0.0.1:{port}"
 
-    # ----- 后台线程启动 Streamlit -----
+    # 写锁（含端口号，供后续检测连接）
+    with open(os.path.join(tempfile.gettempdir(), "zhiying.lock"), "w") as f:
+        f.write(str(port))
+
+    # 环境变量
+    os.environ["BROWSER"] = "echo"
     os.environ["STREAMLIT_SERVER_PORT"] = str(port)
     os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
     os.environ["STREAMLIT_SERVER_ENABLE_CORS"] = "false"
@@ -59,10 +80,10 @@ def _real_main(lock):
     os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
     os.environ["STREAMLIT_SERVER_ADDRESS"] = "127.0.0.1"
     os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
-    # 关键：阻止 Streamlit 自动打开浏览器
-    os.environ["BROWSER"] = "echo"
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
 
-    def run_streamlit():
+    # 后台线程跑 Streamlit
+    def _serve():
         import streamlit.web.bootstrap
         streamlit.web.bootstrap.run(
             os.path.join(base_dir, "app.py"),
@@ -71,40 +92,36 @@ def _real_main(lock):
             flag_options={},
         )
 
-    t = threading.Thread(target=run_streamlit, daemon=True)
-    t.start()
+    threading.Thread(target=_serve, daemon=True).start()
 
-    # ----- 等就绪 -----
+    # 等就绪
     import urllib.request
     for _ in range(40):
+        time.sleep(0.5)
         try:
-            urllib.request.urlopen(url, timeout=0.5)
+            urllib.request.urlopen(url, timeout=0.3)
             break
         except Exception:
-            time.sleep(0.5)
-    else:
-        import tkinter.messagebox as mb
-        mb.showerror("启动失败", "服务未能启动")
-        return
+            pass
 
-    # ----- 单一窗口 -----
+    _open_window(url)
+
+
+def _open_window(url):
     try:
         import webview
         webview.create_window(
-            "智影溯源 — AI肺结节教学平台",
-            url,
-            width=1280,
-            height=800,
-            min_size=(900, 600),
-            text_select=True,
+            "智影溯源 - AI肺结节教学平台",
+            url, width=1280, height=800,
+            min_size=(900, 600), text_select=True,
         )
         webview.start()
     except ImportError:
         import webbrowser
         webbrowser.open(url)
         try:
-            while t.is_alive():
-                t.join(1)
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
             pass
 
