@@ -1746,24 +1746,8 @@ def _show_gradcam_snapshot(epoch: int, caption: str):
 def _show_gradcam_evolution():
     gradcam_dir = GRADCAM_DIR
 
-    # 检查是否有真实 cam 文件
-    has_real = os.path.exists(gradcam_dir) and any(
-        f.endswith("_cam.npy") for f in os.listdir(gradcam_dir))
-
-    # 确定可用的 epoch 范围
-    if has_real:
-        epochs_available = sorted(set(
-            int(f.split("_")[1]) for f in os.listdir(gradcam_dir)
-            if f.endswith("_cam.npy")
-        ))
-        epoch_range = (epochs_available[0], epochs_available[-1]) if epochs_available else (1, 50)
-    else:
-        epoch_range = (1, 50)
-
-    # 滑块只渲染一次
-    epoch = st.slider("选择训练轮次查看Grad-CAM",
-                      epoch_range[0], epoch_range[1],
-                      epoch_range[0],
+    # 始终显示 1-50 轮，有真实文件时优先生成叠加图，否则用模拟
+    epoch = st.slider("选择训练轮次查看Grad-CAM", 1, 50, 1,
                       key="s3_gradcam_slider")
 
     # 尝试加载参考CT图像作为背景
@@ -1777,10 +1761,10 @@ def _show_gradcam_evolution():
             except Exception:
                 continue
 
-    # 先尝试真实 cam
+    # 尝试加载真实 cam 文件
     any_loaded = False
-    if has_real:
-        prefix = f"epoch_{epoch:03d}"
+    prefix = f"epoch_{epoch:03d}"
+    if os.path.exists(gradcam_dir):
         cam_files = sorted([f for f in os.listdir(gradcam_dir)
                             if f.startswith(prefix) and f.endswith("_cam.npy")])
         if cam_files:
@@ -1793,7 +1777,6 @@ def _show_gradcam_evolution():
                                          allow_pickle=True)
                         if isinstance(cam_arr, np.ndarray):
                             cam_small = np.squeeze(cam_arr)
-                            # 上采样到参考图尺寸
                             if ref_img is not None:
                                 h, w = ref_img.shape[:2]
                                 cam_big = cv2.resize(cam_small, (w, h))
@@ -1899,9 +1882,18 @@ def _predict_with_rule_demo(image):
     edge = np.abs(lap)
     edge = cv2.GaussianBlur(edge, (0, 0), 5)
     h, w = gray.shape
+
+    # 根据图像内容计算热点位置（不同图片热点位置不同）
+    # 用边缘密度的重心来偏移中心位置
+    edge_weight = edge / (edge.sum() + 1e-8)
     yy, xx = np.mgrid[0:h, 0:w]
-    cx, cy = w / 2, h / 2
-    sigma_x, sigma_y = w * 0.28, h * 0.28
+    ex = float((xx * edge_weight).sum())
+    ey = float((yy * edge_weight).sum())
+    # 混合固定中心和边缘重心，每张图热点偏向不同
+    cx = w * 0.50 + (ex - w * 0.50) * 0.4
+    cy = h * 0.48 + (ey - h * 0.48) * 0.4
+
+    sigma_x, sigma_y = w * 0.22, h * 0.22
     center_bias = np.exp(-(((xx - cx) ** 2) / (2 * sigma_x ** 2) +
                            ((yy - cy) ** 2) / (2 * sigma_y ** 2)))
     bright_map = np.clip(gray_norm - np.percentile(gray_norm, 60) / 255.0, 0, 1)
