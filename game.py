@@ -1249,7 +1249,10 @@ def render_stage4():
         with col1:
             st.image(overlay_img, caption="AI 热力图叠加", use_container_width=True)
         with col2:
-            ai_mask = (cam > 0.55).astype(np.uint8)
+            # cam 缩放到原图尺寸后再做阈值化
+            w, h = image.size
+            cam_resized = cv2.resize(cam, (w, h))
+            ai_mask = (cam_resized > 0.55).astype(np.uint8)
             ai_outline = _draw_mask_outline(image, ai_mask, (255, 0, 0))
             st.image(ai_outline, caption="AI 关注区域（红色轮廓）", use_container_width=True)
 
@@ -1685,7 +1688,14 @@ def _generate_fake_cam(epoch: int, size: int = 256) -> np.ndarray:
 
 def _show_gradcam_snapshot(epoch: int, caption: str):
     gradcam_dir = GRADCAM_DIR
-    # 尝试加载真实 cam 文件
+    # 加载参考CT背景图
+    ref_img = None
+    for cd in [Path("cases/case_001"), Path("cases/case_002")]:
+        ip = cd / "image.png"
+        if ip.exists():
+            try: ref_img = np.array(Image.open(ip).convert("RGB")); break
+            except Exception: continue
+
     cam_loaded = False
     if os.path.exists(gradcam_dir):
         prefix = f"epoch_{epoch:03d}"
@@ -1700,29 +1710,37 @@ def _show_gradcam_snapshot(epoch: int, caption: str):
                         cam_arr = np.load(os.path.join(gradcam_dir, fname),
                                          allow_pickle=True)
                         if isinstance(cam_arr, np.ndarray):
-                            # 上采样 7x7 → 256x256
                             cam_small = np.squeeze(cam_arr)
                             if cam_small.max() > cam_small.min():
                                 cam_small = (cam_small - cam_small.min()) / (
                                     cam_small.max() - cam_small.min() + 1e-8)
-                            cam_big = cv2.resize(cam_small, (256, 256))
-                            heatmap = cv2.applyColorMap(
-                                np.uint8(cam_big * 255), cv2.COLORMAP_JET)
-                            heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-                            st.image(heatmap_rgb, caption=f"样本{i+1}",
+                            if ref_img is not None:
+                                h, w = ref_img.shape[:2]
+                                cam_big = cv2.resize(cam_small, (w, h))
+                                overlay = _overlay_heatmap(
+                                    Image.fromarray(ref_img), cam_big)
+                            else:
+                                cam_big = cv2.resize(cam_small, (256, 256))
+                                overlay = cv2.applyColorMap(
+                                    np.uint8(cam_big * 255), cv2.COLORMAP_JET)
+                                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+                            st.image(overlay, caption=f"样本{i+1}",
                                      use_container_width=True)
                             cam_loaded = True
                     except Exception:
                         continue
 
-    # 保底：用模拟热力图，显示"从随机到聚焦"的演变
+    # 保底：用模拟热力图，叠加在参考CT上
     if not cam_loaded:
         st.caption(f"**{caption}**")
         fake_cam = _generate_fake_cam(epoch)
-        heatmap = cv2.applyColorMap(np.uint8(fake_cam * 255), cv2.COLORMAP_JET)
-        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-        st.image(heatmap_rgb, caption=f"AI注意力 (第{epoch}轮)",
-                 use_container_width=True)
+        if ref_img is not None:
+            overlay = _overlay_heatmap(Image.fromarray(ref_img), fake_cam)
+            st.image(overlay, caption=f"AI注意力 (第{epoch}轮)", use_container_width=True)
+        else:
+            heatmap = cv2.applyColorMap(np.uint8(fake_cam * 255), cv2.COLORMAP_JET)
+            heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+            st.image(heatmap_rgb, caption=f"AI注意力 (第{epoch}轮)", use_container_width=True)
 
 
 def _show_gradcam_evolution():
@@ -1748,6 +1766,17 @@ def _show_gradcam_evolution():
                       epoch_range[0],
                       key="s3_gradcam_slider")
 
+    # 尝试加载参考CT图像作为背景
+    ref_img = None
+    for case_dir in [Path("cases/case_001"), Path("cases/case_002")]:
+        img_path = case_dir / "image.png"
+        if img_path.exists():
+            try:
+                ref_img = np.array(Image.open(img_path).convert("RGB"))
+                break
+            except Exception:
+                continue
+
     # 先尝试真实 cam
     any_loaded = False
     if has_real:
@@ -1764,27 +1793,36 @@ def _show_gradcam_evolution():
                                          allow_pickle=True)
                         if isinstance(cam_arr, np.ndarray):
                             cam_small = np.squeeze(cam_arr)
-                            if cam_small.max() > cam_small.min():
-                                cam_small = (cam_small - cam_small.min()) / (
-                                    cam_small.max() - cam_small.min() + 1e-8)
-                            cam_big = cv2.resize(cam_small, (256, 256))
-                            heatmap = cv2.applyColorMap(
-                                np.uint8(cam_big * 255), cv2.COLORMAP_JET)
-                            heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-                            st.image(heatmap_rgb, caption=f"样本{i+1}",
+                            # 上采样到参考图尺寸
+                            if ref_img is not None:
+                                h, w = ref_img.shape[:2]
+                                cam_big = cv2.resize(cam_small, (w, h))
+                                overlay = _overlay_heatmap(
+                                    Image.fromarray(ref_img), cam_big)
+                            else:
+                                cam_big = cv2.resize(cam_small, (256, 256))
+                                overlay = cv2.applyColorMap(
+                                    np.uint8(cam_big * 255), cv2.COLORMAP_JET)
+                                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+                            st.image(overlay, caption=f"样本{i+1}",
                                      use_container_width=True)
                             any_loaded = True
                     except Exception:
                         continue
 
-    # 真实文件加载失败 → 模拟热力图
+    # 真实文件加载失败 → 模拟热力图，叠加在参考CT上
     if not any_loaded:
         st.write(f"**第{epoch}轮 AI注意力分布**")
         fake_cam = _generate_fake_cam(epoch)
-        heatmap = cv2.applyColorMap(np.uint8(fake_cam * 255), cv2.COLORMAP_JET)
-        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-        st.image(heatmap_rgb, caption=f"模拟热力图 (第{epoch}轮)",
-                 use_container_width=True)
+        if ref_img is not None:
+            overlay = _overlay_heatmap(Image.fromarray(ref_img), fake_cam)
+            st.image(overlay, caption=f"模拟热力图 (第{epoch}轮，叠加在CT原图上)",
+                     use_container_width=True)
+        else:
+            heatmap = cv2.applyColorMap(np.uint8(fake_cam * 255), cv2.COLORMAP_JET)
+            heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+            st.image(heatmap_rgb, caption=f"模拟热力图 (第{epoch}轮)",
+                     use_container_width=True)
 
     st.caption("💡 热力图中红色区域是AI当前最关注的区域。随着训练深入，"
                "高亮区会从随机分散逐渐聚焦到真正的病灶位置。"
